@@ -4,6 +4,23 @@ One line, right side of your bash prompt, showing usage/credits for each AI
 subscription. Auto-detects keys from installed agent CLIs, or reads manual
 keys from `~/.config/ai-usage/<short>`.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/develalfy/ai-usage/main/install.sh | bash
+```
+
+Or with SSH:
+
+```bash
+git clone git@github.com:develalfy/ai-usage.git ~/projects/ai-usage && ~/projects/ai-usage/install.sh
+```
+
+Then `source ~/.bashrc` (or open a new shell). The bar appears on the right
+side of your prompt, updating once a minute.
+
+**Update later:** just re-run the same command — idempotent.
+
 ## Wire it (bash)
 
 ```bash
