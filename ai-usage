@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ai-usage — one-line usage bar for AI subscriptions.
-# Reads provider creds from a file in $AI_USAGE_CONFIG (default ~/.config/ai-usage).
+# Auto-detects keys from installed agent CLIs; falls back to manual keys in
+# $AI_USAGE_CONFIG/<short> (default ~/.config/ai-usage).
 # Usage: ai-usage [--bar]
 # ponytail: hardcoded endpoint list — extend when adding a provider.
 
@@ -8,33 +9,152 @@ set -u
 DIR="${AI_USAGE_CONFIG:-$HOME/.config/ai-usage}"
 mkdir -p "$DIR"
 
-# Provider probe — each prints "<short>:<value>"; missing key skips silently.
-# ponytail: paths are best-guess; field comment names the value to extract.
+# ----- autodetect: returns "<hdr_style>|<key>" on hit, "" on miss. ---------
+# ponytail: tried in order, first hit wins. Each block is a candidate.
+# Adding a provider = append a block, add an entry to the providers table.
+detect() {
+  local short="$1" p
+  case "$short" in
+    openrouter)
+      for p in \
+        "$HOME/.local/share/opencode/auth.json@@.openrouter.key" \
+        "$HOME/.config/opencode/auth.json@@.openrouter.key" \
+        "$HOME/.config/openrouter/auth.json@@.key" \
+        ; do
+        read -r file jqpath <<<"${p//@@/ }"
+        [ -f "$file" ] || continue
+        k=$(python3 -c "
+import sys,json
+d=json.load(open('$file'))
+v=d
+try:
+    for k in '${jqpath#.}'.split('.'):
+        if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
+    print(v) if isinstance(v,str) and v else None
+except Exception: pass
+" 2>/dev/null)
+        [ -n "$k" ] && { echo "Authorization|$k"; return; }
+      done
+      ;;
+    anthropic)
+      for p in \
+        "$HOME/.claude.json@@.oauth.account.access_token" \
+        "$HOME/.config/anthropic/auth.json@@.key" \
+        "$HOME/.config/claude/auth.json@@.key" \
+        ; do
+        read -r file jqpath <<<"${p//@@/ }"
+        [ -f "$file" ] || continue
+        k=$(python3 -c "
+import sys,json
+d=json.load(open('$file'))
+v=d
+try:
+    for k in '${jqpath#.}'.split('.'):
+        if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
+    print(v) if isinstance(v,str) and v else None
+except Exception: pass
+" 2>/dev/null)
+        [ -n "$k" ] && { echo "x-api-key|$k"; return; }
+      done
+      ;;
+    openai)
+      for p in \
+        "$HOME/.config/openai/auth.json@@.api_key" \
+        "$HOME/.openai/auth.json@@.api_key" \
+        "$HOME/.codex/auth.json@@.OPENAI_API_KEY" \
+        ; do
+        read -r file jqpath <<<"${p//@@/ }"
+        [ -f "$file" ] || continue
+        k=$(python3 -c "
+import sys,json
+d=json.load(open('$file'))
+v=d
+try:
+    for k in '${jqpath#.}'.split('.'):
+        if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
+    print(v) if isinstance(v,str) and v else None
+except Exception: pass
+" 2>/dev/null)
+        [ -n "$k" ] && { echo "Authorization|$k"; return; }
+      done
+      ;;
+    copilot)
+      for p in \
+        "$HOME/.config/github-copilot/hosts.json@@.github.com.oauth_token" \
+        "$HOME/.config/gh/hosts.yml@@github.com.oauth_token" \
+        ; do
+        read -r file jqpath <<<"${p//@@/ }"
+        [ -f "$file" ] || continue
+        case "$file" in
+          *.yml|*.yaml)
+            k=$(python3 -c "
+import sys,re
+t=open('$file').read()
+for ln in t.splitlines():
+    if '${jqpath##*.}:' in ln:
+        m=re.search(r':\s*(\S+)', ln)
+        if m: print(m.group(1)); break
+")
+            [ -n "$k" ] && { echo "Authorization|$k"; return; }
+            ;;
+          *)
+            k=$(python3 -c "
+import sys,json
+d=json.load(open('$file'))
+v=d
+try:
+    for k in '${jqpath#.}'.split('.'):
+        if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
+    print(v) if isinstance(v,str) and v else None
+except Exception: pass
+" 2>/dev/null)
+            [ -n "$k" ] && { echo "Authorization|$k"; return; }
+            ;;
+        esac
+      done
+      ;;
+    agy)
+      # ponytail: no known agent CLI ships an auth file for agy yet.
+      # Fall back to manual key in $DIR/agy only.
+      ;;
+  esac
+}
+
+# Provider table: short|name|url|hdr_style|hdr_val|field
+# ponytail: fields verified live in /review pass. Empty url = endpoint not known yet.
 providers=(
   "openrouter|OpenRouter|https://openrouter.ai/api/v1/auth/key|Authorization||data,0,usage"
   "anthropic|Claude|https://api.anthropic.com/v1/organizations/me|x-api-key|anthropic-version:2023-06-01|id"
   "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization||total_granted"
   "copilot|GitHub|https://api.github.com/copilot_internal/user|Authorization||copilot_plan"
+  "agy|Agy|https://api.agy.ai/v1/me|Authorization||plan"
 )
 
 bar=""
+any_key=0
 for entry in "${providers[@]}"; do
-  IFS='|' read -r short name url hdr_style hdr_val field <<<"$entry"
-  key_file="$DIR/$short"
-  [ -f "$key_file" ] || continue
-  # ponytail: warn on lax key perms — silent is fine, loud on bad. owner must be 6/7.
-  perms=$(stat -c %a "$key_file" 2>/dev/null)
-  case "$perms" in
-    [67][06][06]) ;;
-    *) printf 'ai-use  WARN: %s is mode %s (want 600)\n' "$key_file" "${perms:-?}" >&2 ;;
-  esac
-  key=$(<"$key_file")
-  case "$hdr_style" in
-    x-api-key)     auth_hdr=(-H "x-api-key: $key") ;;
-    Authorization) auth_hdr=(-H "Authorization: Bearer $key") ;;
-    *)             continue ;;
-  esac
-  resp=$(curl -s --max-time 4 "${auth_hdr[@]}" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
+  IFS='|' read -r short name url hdr_style hdr_val field _ <<<"$entry"
+  [ -z "$url" ] && continue   # placeholder, no endpoint yet (agy)
+  # ponytail: file wins over auto-detect — user override trumps installed-agent creds.
+  # 1) manual key file (highest priority — user's explicit choice)
+  src="auto"
+  detected=""
+  if [ -f "$DIR/$short" ]; then
+    perms=$(stat -c %a "$DIR/$short" 2>/dev/null)
+    case "$perms" in
+      [67][06][06]) ;;
+      *) printf 'ai-use  WARN: %s is mode %s (want 600)\n' "$DIR/$short" "${perms:-?}" >&2 ;;
+    esac
+    detected="${hdr_style}|$(<"$DIR/$short")"
+    src="file"
+  fi
+  # 2) auto-detect from installed agent CLI auth (fallback)
+  [ -z "$detected" ] && detected=$(detect "$short")
+  [ -z "$detected" ] && continue
+  any_key=1
+  IFS='|' read -r auth_style key <<<"$detected"
+
+  resp=$(curl -s --max-time 4 -H "$auth_style: $key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
   out=$(printf '%s' "$resp" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
@@ -42,16 +162,16 @@ path='$field'.split(',')
 try:
     v=d
     for k in path:
-        v=v[int(k)] if k.isdigit() else v[k]
+        v=v[int(k)] if k.lstrip('-').isdigit() else v[k]
     if isinstance(v,(int,float)): print(f'{v:.2f}')
     else: print(v)
 except Exception: print('?')
 " 2>/dev/null)
   [ -n "$out" ] || out="?"
-  bar+="${short}:${out} "
+  bar+="${short}:${out}[${src}] "
 done
 
-[ -z "$bar" ] && bar="(no keys — drop one in ~/.config/ai-usage/{openrouter,anthropic,openai,copilot}, mode 600) "
+[ "$any_key" = 0 ] && bar="(no keys — drop one in ~/.config/ai-usage/{openrouter,anthropic,openai,copilot}, mode 600) "
 
 if [ "${1:-}" = "--bar" ]; then
   printf '%s' "$bar"
