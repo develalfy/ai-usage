@@ -1,68 +1,57 @@
 #!/usr/bin/env bash
 # ai-usage — one-line usage bar for AI subscriptions.
-# Reads provider creds from env or ~/.config/ai-usage/{provider} file.
-# Usage: ai-usage [--bar] [--watch N]   # --bar for tmux, --watch N for refresh
-# Lazy: probes only what's reachable; skips providers with no key/endpoint.
+# Reads provider creds from a file in $AI_USAGE_CONFIG (default ~/.config/ai-usage).
+# Usage: ai-usage [--bar]
 # ponytail: hardcoded endpoint list — extend when adding a provider.
 
 set -u
 DIR="${AI_USAGE_CONFIG:-$HOME/.config/ai-usage}"
 mkdir -p "$DIR"
 
-# ponytail: single python3 call parses JSON, replaces jq dep. python3 -c is stdlib.
-py() { python3 -c "import sys,json; d=json.load(sys.stdin);
-import functools,operator
-v=$1
-try:
-    cur,total=v; print(f'{cur}/{total}')
-except Exception:
-    print(v) if v is not None else print('?')" 2>/dev/null; }
-
-# Provider probe — each prints "<short_name>:<display>" or "<short_name>:err"
+# Provider probe — each prints "<short>:<value>"; missing key skips silently.
+# ponytail: paths are best-guess; field comment names the value to extract.
 providers=(
-  "openrouter|OpenRouter|https://openrouter.ai/api/v1/auth/key|Authorization|"
-  "anthropic|Claude|https://api.anthropic.com/v1/organizations/me|x-api-key|anthropic-version:2023-06-01|monthly_spend"
-  "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization|"
-  "copilot|GitHub|https://api.github.com/copilot_internal/user|Authorization|"
+  "openrouter|OpenRouter|https://openrouter.ai/api/v1/auth/key|Authorization||data,0,usage"
+  "anthropic|Claude|https://api.anthropic.com/v1/organizations/me|x-api-key|anthropic-version:2023-06-01|id"
+  "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization||total_granted"
+  "copilot|GitHub|https://api.github.com/copilot_internal/user|Authorization||copilot_plan"
 )
 
 bar=""
 for entry in "${providers[@]}"; do
   IFS='|' read -r short name url hdr_style hdr_val field <<<"$entry"
-  key=""
-  [ -f "$DIR/$short" ] && key=$(<"$DIR/$short")
-  [ -z "$key" ] && continue
+  key_file="$DIR/$short"
+  [ -f "$key_file" ] || continue
+  # ponytail: warn on lax key perms — silent is fine, loud on bad. owner must be 6/7.
+  perms=$(stat -c %a "$key_file" 2>/dev/null)
+  case "$perms" in
+    [67][06][06]) ;;
+    *) printf 'ai-use  WARN: %s is mode %s (want 600)\n' "$key_file" "${perms:-?}" >&2 ;;
+  esac
+  key=$(<"$key_file")
   case "$hdr_style" in
-    x-api-key)       auth_hdr=(-H "x-api-key: $key") ;;
-    Authorization)   auth_hdr=(-H "Authorization: Bearer $key") ;;
-    *)               continue ;;
+    x-api-key)     auth_hdr=(-H "x-api-key: $key") ;;
+    Authorization) auth_hdr=(-H "Authorization: Bearer $key") ;;
+    *)             continue ;;
   esac
   resp=$(curl -s --max-time 4 "${auth_hdr[@]}" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
-  # ponytail: try common shapes; first parse wins. Add shape when a new provider lands.
   out=$(printf '%s' "$resp" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-for path in [
-    ['data',0,'usage'],          # openrouter
-    ['monthly_spend'],           # anthropic org
-    ['total_granted'],           # openai credit_grants (cents)
-    ['copilot_plan']             # copilot
-]:
-    try:
-        v=d
-        for k in path: v=v[k]
-        if isinstance(v,(int,float)): print(f'{v:.2f}')
-        else: print(v)
-        sys.exit(0)
-    except (KeyError,TypeError,IndexError): pass
-print('?')
+path='$field'.split(',')
+try:
+    v=d
+    for k in path:
+        v=v[int(k)] if k.isdigit() else v[k]
+    if isinstance(v,(int,float)): print(f'{v:.2f}')
+    else: print(v)
+except Exception: print('?')
 " 2>/dev/null)
-  [ -z "$out" ] && out="?"
+  [ -n "$out" ] || out="?"
   bar+="${short}:${out} "
 done
 
-# Fallback if nothing responded (no keys configured yet)
-[ -z "$bar" ] && bar="(no keys — drop one in ~/.config/ai-usage/openrouter|anthropic|openai|copilot) "
+[ -z "$bar" ] && bar="(no keys — drop one in ~/.config/ai-usage/{openrouter,anthropic,openai,copilot}, mode 600) "
 
 if [ "${1:-}" = "--bar" ]; then
   printf '%s' "$bar"
