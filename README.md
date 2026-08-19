@@ -1,76 +1,67 @@
-# ai-usage — terminal usage bar for AI subscriptions.
+# ai-usage — Bash status line for AI subscriptions
 
-One line, right side of your bash prompt, showing usage/credits for each AI
-subscription. Auto-detects keys from installed agent CLIs, or reads manual
-keys from `~/.config/ai-usage/<short>`.
+A compact, colorized status line above your Bash prompt. It refreshes once a minute and never shares the line where you type commands.
+
+```
+◆ Claude 77% │ ⬢ OpenAI 39% │ ◆ MiniMax 5h 6% · week 43%
+you@host:~$
+```
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/develalfy/ai-usage/main/install.sh | bash
+git clone git@github.com:develalfy/ai-usage.git ~/projects/ai-usage
+~/projects/ai-usage/install.sh
+source ~/.bashrc
 ```
 
-Or with SSH:
+The installer is idempotent: run it again after updating the checkout.
+
+## What it shows
+
+| Provider | Subscription data |
+|---|---|
+| Claude Code | Current 5-hour usage window (detailed view also shows 7-day usage) |
+| Codex / ChatGPT | Current short rate-limit window (detailed view also shows the long window, reset time, plan, and spend control) |
+| MiniMax Coding Plan | Current 5-hour and weekly quota usage |
+| GitHub Copilot | Plan, when its installed credential format is supported |
+| Agy / Antigravity | Shown as unavailable: no public usage endpoint exists |
+
+Percentages are **used quota**, not quota remaining. Green is under 60%, yellow is 60–84%, and red is 85% or higher.
+
+## Credentials
+
+Manual keys live in `~/.config/ai-usage/<provider>` and must be mode `600`. A manual key overrides automatic detection.
+
+| Provider | Automatic credential source |
+|---|---|
+| Claude | `~/.claude/.credentials.json` (Claude Code OAuth) |
+| OpenAI | `~/.codex/auth.json` (Codex ChatGPT OAuth) |
+| MiniMax | `~/.local/share/opencode/auth.json` or `~/.config/opencode/auth.json` (`minimax-coding-plan`) |
+| Copilot | `~/.config/github-copilot/hosts.json` or `~/.config/gh/hosts.yml` |
+
+MiniMax uses the International Token Plan endpoint (`api.minimax.io`). A China-region key is not supported.
+
+## Commands
 
 ```bash
-git clone git@github.com:develalfy/ai-usage.git ~/projects/ai-usage && ~/projects/ai-usage/install.sh
+ai-usage          # detailed, multi-line view in an interactive terminal
+ai-usage --bar    # compact, plain line used by the Bash prompt integration
 ```
 
-Then `source ~/.bashrc` (or open a new shell). The bar appears on the right
-side of your prompt, updating once a minute.
-
-**Update later:** just re-run the same command — idempotent.
-
-## Wire it (bash)
+The prompt integration caches the compact status line at `/tmp/ai-usage.bar.$UID` for 60 seconds. Force a refresh:
 
 ```bash
-# in ~/.bashrc
-if [ -x "$HOME/projects/ai-usage/ai-usage" ]; then
-    _ai_bar() {
-        local f=/tmp/ai-usage.bar
-        [ $(( $(date +%s) - $(stat -c %Y "$f" 2>/dev/null || echo 0) )) -gt 60 ] \
-            && "$HOME/projects/ai-usage/ai-usage" --bar > "$f" 2>/dev/null
-        local bar=$(<"$f")
-        [ -n "$bar" ] && printf '\e7\e[%dG\e[36m%s\e[0m\e8' $(( $(tput cols) - ${#bar} )) "$bar"
-    }
-    PROMPT_COMMAND="_ai_bar;$PROMPT_COMMAND"
-fi
+rm -f "/tmp/ai-usage.bar.$UID"
+source ~/.bashrc
 ```
 
-## Key resolution (per provider, in order)
+## Troubleshooting
 
-1. **Manual** — `~/.config/ai-usage/<short>` (mode 600, wins over auto)
-2. **Auto-detect** — known auth files of installed agent CLIs:
+- `unavailable` means credentials were found, but the provider's usage request failed or was rate-limited. It does not mean the subscription is inactive.
+- `WARN: <file> is mode 644` means the manual key file is too permissive: run `chmod 600 <file>`.
+- Run `ai-usage` directly for the detailed view and `bash -n ai-usage` to check script syntax.
 
-   | Provider  | Detected from                                                     |
-   |-----------|-------------------------------------------------------------------|
-   | openrouter| `~/.local/share/opencode/auth.json`, `~/.config/openrouter/...`    |
-   | anthropic | `~/.claude.json` (oauth), `~/.config/anthropic/auth.json`         |
-   | openai    | `~/.config/openai/auth.json`, `~/.codex/auth.json`                |
-   | copilot   | `~/.config/github-copilot/hosts.json`, `~/.config/gh/hosts.yml`   |
-   | agy       | manual only — no known agent CLI auth file yet                     |
+## Keeping documentation current
 
-## Providers
-
-| short      | name       | endpoint                                                  |
-|------------|------------|-----------------------------------------------------------|
-| openrouter | OpenRouter | `https://openrouter.ai/api/v1/auth/key`                  |
-| anthropic  | Claude     | `https://api.anthropic.com/v1/organizations/me`          |
-| openai     | OpenAI     | `https://api.openai.com/v1/dashboard/billing/credit_grants` |
-| copilot    | GitHub     | `https://api.github.com/copilot_internal/user`            |
-| agy        | Agy        | `https://api.agy.ai/v1/me`                                |
-
-## Why both modes
-
-If you use Claude Code / opencode / GitHub Copilot / openai CLI regularly, their
-auth is already on disk. The bar lights up automatically — no extra setup.
-If you only pay for a subscription but never install the CLI (e.g. Agy today),
-drop your API key into `~/.config/ai-usage/agy` and you're done.
-
-## Debugging
-
-- `ai-usage` (no flag) → verbose print, shows `[auto]` vs `[file]` source
-- `ai-usage --bar` → silent bar mode, for status-line consumers
-- `WARN: <file> is mode 644` → too-permissive key file, `chmod 600 <file>`
-
-ponytail: hardcoded endpoint list — extend when adding a provider.
+Every provider, output, credential-source, or installer change should update this README in the same change.

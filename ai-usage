@@ -9,6 +9,50 @@ set -u
 DIR="${AI_USAGE_CONFIG:-$HOME/.config/ai-usage}"
 mkdir -p "$DIR"
 
+# ----- display helpers -------------------------------------------------
+# ponytail: plain ANSI, no color/format libs — ok for a 5-provider bar.
+color_for() { # $1=percent (may be empty/non-numeric) -> ansi color code
+  local p="${1:-}"
+  case "$p" in ''|*[!0-9.]*) echo "1;37"; return ;; esac
+  awk -v p="$p" 'BEGIN{
+    if (p+0 >= 85) print "1;31";
+    else if (p+0 >= 60) print "1;33";
+    else print "1;32";
+  }'
+}
+fmt_secs() { # $1=seconds -> "4h12m" / "37m" (empty on bad input)
+  local s="${1:-}"
+  case "$s" in ''|*[!0-9]*) return ;; esac
+  local h=$((s/3600)) m=$(((s%3600)/60))
+  if [ "$h" -gt 0 ]; then printf '%dh%dm' "$h" "$m"; else printf '%dm' "$m"; fi
+}
+icon_for() {
+  case "$1" in
+    openrouter) printf '\xe2\x97\x87' ;;   # ◇
+    anthropic)  printf '\xe2\x97\x86' ;;   # ◆
+    openai)     printf '\xe2\xac\xa2' ;;   # ⬢
+    copilot)    printf '\xef\x84\x9b' ;;   # (falls back fine as plain glyph)
+    minimax)    printf '\xe2\x97\x86' ;;   # ◆
+    agy)        printf '\xe2\x96\xb3' ;;   # △
+    *) printf '*' ;;
+  esac
+}
+badge_for() {
+  case "$1" in
+    openrouter) printf '\033[48;5;24;38;5;159m' ;;
+    anthropic)  printf '\033[48;5;130;38;5;255m' ;;
+    openai)     printf '\033[48;5;27;38;5;255m' ;;
+    copilot)    printf '\033[48;5;236;38;5;255m' ;;
+    minimax)    printf '\033[48;5;52;38;5;255m' ;;
+    agy)        printf '\033[48;5;94;38;5;255m' ;;
+    *)          printf '\033[48;5;238;38;5;255m' ;;
+  esac
+}
+rich=1
+[ "${1:-}" = "--bar" ] && rich=0
+[ -t 1 ] || rich=0   # no color/multi-line when piped (e.g. into PROMPT_COMMAND capture)
+richlines=()
+
 # ----- autodetect: returns "<hdr_style>|<key>" on hit, "" on miss. ---------
 # ponytail: tried in order, first hit wins. Each block is a candidate.
 # Adding a provider = append a block, add an entry to the providers table.
@@ -37,8 +81,9 @@ except Exception: pass
       done
       ;;
     anthropic)
+      # ponytail: only true Console API keys go on the /v1/orgs endpoint —
+      # Claude Code OAuth tokens use /api/oauth/usage, dispatched below.
       for p in \
-        "$HOME/.claude.json@@.oauth.account.access_token" \
         "$HOME/.config/anthropic/auth.json@@.key" \
         "$HOME/.config/claude/auth.json@@.key" \
         ; do
@@ -56,12 +101,66 @@ except Exception: pass
 " 2>/dev/null)
         [ -n "$k" ] && { echo "x-api-key|$k"; return; }
       done
+      for f in "$HOME/.claude/.credentials.json" "$HOME/.claude.json"; do
+        [ -f "$f" ] || continue
+        # ponytail: Claude Code OAuth access token — paired with /api/oauth/usage.
+        tok=$(python3 -c "
+import json
+try:
+    d=json.load(open('$f'))
+    o=d.get('claudeAiOauth') or {}
+    t=o.get('accessToken') or ''
+    print(t) if t else None
+except Exception: pass
+" 2>/dev/null)
+        echo "oauth|${tok:--}"
+        return
+      done
       ;;
     openai)
+      # ponytail: true API keys go on the dashboard endpoint; Codex ChatGPT-OAuth
+      # uses chatgpt.com/backend-api/wham/usage, dispatched below.
       for p in \
         "$HOME/.config/openai/auth.json@@.api_key" \
         "$HOME/.openai/auth.json@@.api_key" \
         "$HOME/.codex/auth.json@@.OPENAI_API_KEY" \
+        ; do
+        read -r file jqpath <<<"${p//@@/ }"
+        [ -f "$file" ] || continue
+        k=$(python3 -c "
+import sys,json
+d=json.load(open('$file'))
+v=d
+try:
+    for k in '${jqpath#.}'.split('.'):
+        if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
+    print(v) if isinstance(v,str) and v else None
+except Exception: pass
+" 2>/dev/null)
+        [ -n "$k" ] && { echo "Authorization|$k"; return; }
+      done
+      if [ -f "$HOME/.codex/auth.json" ]; then
+        # ponytail: Codex ChatGPT-OAuth access token — paired with wham/usage.
+        tok=$(python3 -c "
+import json
+try:
+    d=json.load(open('$HOME/.codex/auth.json'))
+    t=d.get('tokens',{}).get('access_token') or ''
+    print(t) if t else None
+except Exception: pass
+" 2>/dev/null)
+        if [ -n "$tok" ]; then echo "oauth|$tok"; return; fi
+        echo "oauth|-"; return
+      fi
+      ;;
+    minimax)
+      # ponytail: OpenCode stores the MiniMax Coding Plan key under a
+      # hyphenated dict key (`minimax-coding-plan.key`). The existing dot-walker
+      # uses direct dict-by-string lookup (`v[k]`), so no special parsing is
+      # required — just supply the right path.
+      for p in \
+        "$HOME/.local/share/opencode/auth.json@@.minimax-coding-plan.key" \
+        "$HOME/.config/opencode/auth.json@@.minimax-coding-plan.key" \
         ; do
         read -r file jqpath <<<"${p//@@/ }"
         [ -f "$file" ] || continue
@@ -114,8 +213,10 @@ except Exception: pass
       done
       ;;
     agy)
-      # ponytail: no known agent CLI ships an auth file for agy yet.
-      # Fall back to manual key in $DIR/agy only.
+      # ponytail: Antigravity/agy has no documented public quota API.
+      # Just report "installed, no queryable endpoint" if the CLI's own
+      # OAuth creds exist; manual key in $DIR/agy still overrides above.
+      [ -f "$HOME/.antigravity/oauth_creds.json" ] && { echo "no-endpoint|-"; return; }
       ;;
   esac
 }
@@ -123,18 +224,19 @@ except Exception: pass
 # Provider table: short|name|url|hdr_style|hdr_val|field
 # ponytail: fields verified live in /review pass. Empty url = endpoint not known yet.
 providers=(
-  "openrouter|OpenRouter|https://openrouter.ai/api/v1/auth/key|Authorization||data,0,usage"
   "anthropic|Claude|https://api.anthropic.com/v1/organizations/me|x-api-key|anthropic-version:2023-06-01|id"
   "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization||total_granted"
   "copilot|GitHub|https://api.github.com/copilot_internal/user|Authorization||copilot_plan"
-  "agy|Agy|https://api.agy.ai/v1/me|Authorization||plan"
+  # ponytail: MiniMax International Coding Plan — single non-fallback endpoint.
+  # No China mirror, no retry: the bar should mirror reality, not chase it.
+  "minimax|MiniMax|https://api.minimax.io/v1/token_plan/remains|Authorization||"
+  "agy|Agy|||Authorization||plan"
 )
 
 bar=""
 any_key=0
 for entry in "${providers[@]}"; do
   IFS='|' read -r short name url hdr_style hdr_val field _ <<<"$entry"
-  [ -z "$url" ] && continue   # placeholder, no endpoint yet (agy)
   # ponytail: file wins over auto-detect — user override trumps installed-agent creds.
   # 1) manual key file (highest priority — user's explicit choice)
   src="auto"
@@ -153,28 +255,226 @@ for entry in "${providers[@]}"; do
   [ -z "$detected" ] && continue
   any_key=1
   IFS='|' read -r auth_style key <<<"$detected"
+  case "$auth_style" in
+    oauth)
+      # ponytail: OAuth endpoints differ per provider; dispatch + parse here.
+      out=""
+      case "$short" in
+        anthropic)
+          # Claude Code OAuth usage — Bearer + oauth-2025-04-20 beta + UA.
+          if [ -n "$key" ] && [ "$key" != "-" ]; then
+            resp=$(curl -s --max-time 4 \
+              -H "Authorization: Bearer $key" \
+              -H "anthropic-beta: oauth-2025-04-20" \
+              -H "User-Agent: claude-code" \
+              "https://api.anthropic.com/api/oauth/usage" 2>/dev/null) || resp=""
+            [ -n "$resp" ] && out=$(printf '%s' "$resp" | python3 -c "
+import sys,json,re
+try:
+    d=json.load(sys.stdin)
+    fh=d.get('five_hour') or {}
+    sd=d.get('seven_day') or {}
+    fu=fh.get('utilization'); su=sd.get('utilization')
+    if fu is None or su is None: raise SystemExit(0)
+    ex=d.get('extra_usage') or {}
+    extra=''
+    if ex.get('is_enabled'):
+        used=ex.get('used_credits'); lim=ex.get('monthly_limit')
+        if used is not None and lim:
+            extra=f'extra usage \${used:.1f}/\${lim:.0f}'
+    # ponytail: strip backslashes/control chars — this text is later rendered
+    # with `printf %b` for color codes; an API response must never be able
+    # to smuggle its own escape sequences through that reinterpretation.
+    extra = re.sub(r'[\\\\\x00-\x1f]', '', extra)
+    print(f'{fu:.1f}|{su:.1f}|{extra}')
+except Exception: pass
+" 2>/dev/null)
+          fi
+          ;;
+        openai)
+          # Codex ChatGPT-OAuth usage — Bearer + codex-cli UA + optional acct id.
+          if [ -n "$key" ] && [ "$key" != "-" ]; then
+            acc_id=$(python3 -c "
+import json
+try:
+    d=json.load(open('$HOME/.codex/auth.json'))
+    t=d.get('tokens',{}) if isinstance(d,dict) else {}
+    print(t.get('account_id') or d.get('account_id') or '')
+except Exception: pass
+" 2>/dev/null)
+            resp=$(curl -s --max-time 4 \
+              -H "Authorization: Bearer $key" \
+              -H "User-Agent: codex-cli" \
+              ${acc_id:+-H "chatgpt-account-id: $acc_id"} \
+              "https://chatgpt.com/backend-api/wham/usage" 2>/dev/null) || resp=""
+            [ -n "$resp" ] && out=$(printf '%s' "$resp" | python3 -c "
+import sys,json,re
+try:
+    d=json.load(sys.stdin)
+    r=d.get('rate_limit') or {}
+    p=r.get('primary_window') or {}
+    s=r.get('secondary_window') or {}
+    pu=p.get('used_percent') if isinstance(p,dict) else None
+    su=s.get('used_percent') if isinstance(s,dict) else None
+    if pu is None: raise SystemExit(0)
+    reset_secs=p.get('reset_after_seconds')
+    extra=''
+    if isinstance(reset_secs,(int,float)) and reset_secs > 0:
+        rs=int(reset_secs); h=rs//3600; m=(rs%3600)//60
+        extra=f'resets in {h}h {m}m' if h else f'resets in {m}m'
+    sc=d.get('spend_control') or {}
+    il=sc.get('individual_limit') or {}
+    sp=il.get('used_percent')
+    if sp is not None: extra=(extra+f' spend used {sp}%').strip()
+    plan=d.get('plan_type') or ''
+    if plan: extra=(extra+f' plan {plan}').strip()
+    # ponytail: strip backslashes/control chars — plan_type is API-sourced
+    # text later rendered with `printf %b`; must not carry its own escapes.
+    extra = re.sub(r'[\\\\\x00-\x1f]', '', extra)
+    print(f'{pu}|{su if su is not None else \"\"}|{extra}')
+except Exception: pass
+" 2>/dev/null)
+          fi
+          ;;
+      esac
+      if [ -n "$out" ]; then
+        case "$short" in
+          anthropic)
+            IFS='|' read -r fu su extra <<<"$out"
+            bar+="◆ Claude ${fu}%"
+            bar+=" | "
+            if [ "$rich" = 1 ]; then
+              line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  \033[$(color_for "$fu")m5-hour ${fu}%\033[0m  \033[$(color_for "$su")m7-day ${su}%\033[0m"
+              [ -n "$extra" ] && line+="   (${extra})"
+              richlines+=("$line")
+            fi
+            ;;
+          openai)
+            IFS='|' read -r pu su extra <<<"$out"
+            bar+="⬢ OpenAI ${pu}%"
+            bar+=" | "
+            if [ "$rich" = 1 ]; then
+              line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  \033[$(color_for "$pu")mshort window ${pu}%\033[0m"
+              [ -n "$su" ] && line+="  \033[$(color_for "$su")mlong window ${su}%\033[0m"
+              [ -n "$extra" ] && line+="   ($extra)"
+              richlines+=("$line")
+            fi
+            ;;
+        esac
+      else
+          bar+="$(icon_for "$short") ${name} unavailable | "
+          [ "$rich" = 1 ] && richlines+=("  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  signed in, but the usage service is unavailable")
+      fi
+      continue
+      ;;
+    no-endpoint)
+       bar+="$(icon_for "$short") ${name} unavailable | "
+       [ "$rich" = 1 ] && richlines+=("  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  installed, but no public usage service is available")
+      continue
+      ;;
+  esac
+  [ -z "$url" ] && continue   # placeholder, no endpoint yet
 
-  resp=$(curl -s --max-time 4 -H "$auth_style: $key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
-  out=$(printf '%s' "$resp" | python3 -c "
+  hdr_key="$key"
+  [ "$auth_style" = Authorization ] && hdr_key="Bearer $key"
+  # ponytail: MiniMax Token Plan needs base_resp gating + a nested lookup
+  # (root or .data.model_remains, filtered by model_name=="general"), which
+  # the comma-path field walker can't express — dispatch on $short here.
+  if [ "$short" = "minimax" ]; then
+    resp=$(curl -s --max-time 4 -H "$auth_style: $hdr_key" "$url" 2>/dev/null) || resp=""
+    out=""
+    [ -n "$resp" ] && out=$(printf '%s' "$resp" | python3 -c "
 import sys,json
+try:
+    d=json.load(sys.stdin)
+    br=d.get('base_resp') or {}
+    if not isinstance(br,dict) or str(br.get('status_code',''))!='0': raise SystemExit(0)
+    mr=d.get('model_remains')
+    if mr is None and isinstance(d.get('data'),dict): mr=d['data'].get('model_remains')
+    if not isinstance(mr,list): raise SystemExit(0)
+    g=next((m for m in mr if isinstance(m,dict) and m.get('model_name')=='general'), None)
+    if g is None: raise SystemExit(0)
+    def num(v):
+        try: return float(v)
+        except Exception: return None
+    ci=num(g.get('current_interval_remaining_percent'))
+    cw=num(g.get('current_weekly_remaining_percent'))
+    five=int(round(100-ci)) if ci is not None else None
+    week=int(round(100-cw)) if cw is not None else None
+    if five is None and week is None: raise SystemExit(0)
+    print(f'{five if five is not None else \"\"}|{week if week is not None else \"\"}')
+except Exception: pass
+" 2>/dev/null)
+    if [ -n "$out" ]; then
+      IFS='|' read -r five week <<<"$out"
+      bar+="$(icon_for "$short") ${name}"
+      [ -n "$five" ] && bar+=" 5h ${five}%"
+      [ -n "$week" ] && bar+=" · week ${week}%"
+      bar+=" | "
+      if [ "$rich" = 1 ]; then
+        line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m"
+        [ -n "$five" ] && line+="  \033[$(color_for "$five")m5h ${five}%\033[0m"
+        [ -n "$week" ] && line+="  \033[$(color_for "$week")mweek ${week}%\033[0m"
+        richlines+=("$line")
+      fi
+    else
+      bar+="$(icon_for "$short") ${name} unavailable | "
+      [ "$rich" = 1 ] && richlines+=("  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  signed in, but the usage service is unavailable")
+    fi
+    continue
+  fi
+  resp=$(curl -s --max-time 4 -H "$auth_style: $hdr_key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
+  read -r out rextra <<<"$(printf '%s' "$resp" | python3 -c "
+import sys,json,re
 d=json.load(sys.stdin)
 path='$field'.split(',')
 try:
     v=d
     for k in path:
         v=v[int(k)] if k.lstrip('-').isdigit() else v[k]
-    if isinstance(v,(int,float)): print(f'{v:.2f}')
-    else: print(v)
-except Exception: print('?')
-" 2>/dev/null)
+    val = f'{v:.2f}' if isinstance(v,(int,float)) else str(v)
+except Exception:
+    val='?'
+extra=''
+try:
+    if '$short' == 'openrouter':
+        dd=d.get('data') or {}
+        rem=dd.get('limit_remaining')
+        if rem is not None: extra=f'remaining \${rem}'
+except Exception: pass
+# ponytail: strip backslashes/control chars — API-sourced text is later
+# rendered with `printf %b`; must not carry its own escape sequences.
+san = lambda s: re.sub(r'[\\\\\x00-\x1f]', '', s)
+print(san(val), san(extra) or '-')
+" 2>/dev/null)"
   [ -n "$out" ] || out="?"
-  bar+="${short}:${out}[${src}] "
+  [ "$rextra" = "-" ] && rextra=""
+  # --bar is deliberately brief; detailed cost/plan/reset data stays in the
+  # interactive view while the prompt status line remains glanceable.
+  bar+="$(icon_for "$short") ${name}"
+  bar+=" | "
+  if [ "$rich" = 1 ]; then
+    unit=""; [ "$short" = openrouter ] && unit=" usage \$"
+    line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m: ${unit}${out}"
+    [ -n "$rextra" ] && line+="  ($rextra)"
+    richlines+=("$line")
+  fi
 done
 
-[ "$any_key" = 0 ] && bar="(no keys — drop one in ~/.config/ai-usage/{openrouter,anthropic,openai,copilot}, mode 600) "
+# Keep the cached bar's plain form compact and make every separator intentional.
+bar="${bar% | }"
+
+[ "$any_key" = 0 ] && bar="No providers connected · add a key in ~/.config/ai-usage/"
 
 if [ "${1:-}" = "--bar" ]; then
   printf '%s' "$bar"
+elif [ "$rich" = 1 ]; then
+  printf '\033[1;36mai-use\033[0m  \033[2mYour AI usage at a glance\033[0m\n'
+  if [ "$any_key" = 0 ]; then
+    printf '  no providers connected — add a key in ~/.config/ai-usage/ (mode 600)\n'
+  else
+    for l in "${richlines[@]}"; do printf '%b\n' "$l"; done
+  fi
 else
   printf '\033[1;36mai-use\033[0m  %s\n' "$bar"
 fi
