@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ai-usage-tmux-status — tmux status-right wrapper for ai-usage.
+# Prints the cached, sanitized compact bar so even a 5-second status-interval
+# never costs more than one provider-fetch per minute.
+#
+# ponytail: locates the sibling `ai-usage` via $BASH_SOURCE so the wrapper
+# works whether it's invoked from $REPO/, a symlink, or any relative path.
+# Cache is private per user (mode 700 dir, 600 file) at
+# ${XDG_CACHE_HOME:-$HOME/.cache}/ai-usage-tmux/.
+
+set -u
+
+# --- resolve sibling ai-usage -----------------------------------------
+self="${BASH_SOURCE[0]}"
+while [ -h "$self" ]; do
+  d=$(dirname -- "$self")
+  self=$(readlink -- "$self")
+  case "$self" in
+    /*) ;;
+    *) self="$d/$self" ;;
+  esac
+done
+WRAP_DIR=$(cd -- "$(dirname -- "$self")" && pwd)
+AI_USAGE_SCRIPT="$WRAP_DIR/ai-usage"
+
+# --- private per-user cache -------------------------------------------
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ai-usage-tmux"
+CACHE_FILE="$CACHE_DIR/status"
+LOCK_DIR="$CACHE_DIR/.lock"
+MAX_AGE=60
+MAX_LEN=240
+
+umask 077
+mkdir -p "$CACHE_DIR" 2>/dev/null || { printf ''; exit 0; }
+chmod 700 "$CACHE_DIR" 2>/dev/null || :
+
+# --- serve from cache if fresh ----------------------------------------
+# Fail-soft: any stat error falls through to the refresh path.
+mtime=$(stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)
+now=$(date +%s)
+if [ -s "$CACHE_FILE" ] && [ $((now - mtime)) -lt "$MAX_AGE" ]; then
+  IFS= read -r line <"$CACHE_FILE" || line=""
+  printf '%s' "$line"
+  exit 0
+fi
+
+# --- refresh (singleflight-locked) ------------------------------------
+# If another tmux tick is already fetching, don't pile on the providers' APIs.
+if mkdir "$LOCK_DIR" 2>/dev/null; then
+  trap 'rmdir "$LOCK_DIR" 2>/dev/null || :' EXIT
+  tmp="$CACHE_DIR/.status.$$"
+  if [ -x "$AI_USAGE_SCRIPT" ] \
+     && timeout 30 "$AI_USAGE_SCRIPT" --bar >"$tmp" 2>/dev/null \
+     && [ -s "$tmp" ]; then
+    # Keep printable ASCII + tab/newline; collapse to one bounded line.
+    # Strips unicode icons and ANSI so tmux status-right stays plain text.
+    LC_ALL=C tr -cd '\11\12\15\40-\176' <"$tmp" \
+      | tr '\n' ' ' | cut -c 1-"$MAX_LEN" >"$tmp.clean"
+    chmod 600 "$tmp.clean"
+    mv -f "$tmp.clean" "$CACHE_FILE"
+  fi
+  rm -f "$tmp" "$tmp.clean" 2>/dev/null || :
+else
+  sleep 0.05
+fi
+
+# --- print whatever's cached (possibly empty on first run) ------------
+IFS= read -r line <"$CACHE_FILE" 2>/dev/null || line=""
+printf '%s' "$line"
