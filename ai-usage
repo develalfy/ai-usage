@@ -417,18 +417,21 @@ except Exception: pass
 " 2>/dev/null)
     if [ -n "$out" ]; then
       IFS='|' read -r five week <<<"$out"
+      c1=$(color_for "$five"); c2=$(color_for "$week")
       bar+="$(icon_for "$short") ${name}"
-      [ -n "$five" ] && bar+=" 5h ${five}%"
-      [ -n "$week" ] && bar+=" · week ${week}%"
-      bar+=" | "
+      [ -n "$five" ] && bar+=" \033[${c1}m5h ${five}%\033[0m"
+      [ -n "$week" ] && bar+=" \033[${c2}mweek ${week}%\033[0m"
+      bar+=" \033[38;5;244m│\033[0m "
+      shorts+="$(icon_for "$short") ${name}${five:+ 5h ${five}%}${week:+ week ${week}%}"$'\n'
       if [ "$rich" = 1 ]; then
         line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m"
-        [ -n "$five" ] && line+="  \033[$(color_for "$five")m5h ${five}%\033[0m"
-        [ -n "$week" ] && line+="  \033[$(color_for "$week")mweek ${week}%\033[0m"
+        [ -n "$five" ] && line+="  \033[${c1}m5h ${five}%\033[0m"
+        [ -n "$week" ] && line+="  \033[${c2}mweek ${week}%\033[0m"
         richlines+=("$line")
       fi
     else
-      bar+="$(icon_for "$short") ${name} unavailable | "
+      bar+="$(icon_for "$short") ${name} unavailable \033[38;5;244m│\033[0m "
+      shorts+="$(icon_for "$short") ${name} unavailable"$'\n'
       [ "$rich" = 1 ] && richlines+=("  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  signed in, but the usage service is unavailable")
     fi
     continue
