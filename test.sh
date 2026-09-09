@@ -127,6 +127,18 @@ chmod 644 "$sandbox/openrouter"
 err=$(HOME="$sandbox" AI_USAGE_CONFIG="$sandbox" ./ai-usage --bar 2>&1 >/dev/null)
 assert_contains "perms: warns on 644" "WARN" "$err"
 
+# 4b. openrouter bar includes color codes (green when under cap).
+# The fixture has limit=50 and usage_monthly=12.34 → pct≈25 → color 1;32 (green).
+out=$(./ai-usage --bar 2>&1)
+if [[ "$out" == *"\033[1;32m"* ]]; then
+  echo "  PASS  color: green ANSI on low utilization"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  color: expected green ANSI on low utilization"
+  echo "        got: $out"
+  FAIL=$((FAIL+1))
+fi
+
 # 5. JSON mode (parseable, dict with providers list).
 out=$(./ai-usage --json 2>&1)
 if echo "$out" | python3 -c '
