@@ -13,11 +13,12 @@
 ## Gate 3 — Verify
 - [x] Command: `cd ~/projects/ai-usage && ./test.sh`
 - [x] Exit code: 0
-- [x] Result: PASS: 18  FAIL: 0
+- [x] Result: PASS: 20  FAIL: 0
 - [x] Live bar (real config): `◇ OpenRouter $ 0.00 (month $ 0 + byok $ 0.22)`
 - [x] Live `--check` exit: 0 (healthy)
+- [x] Live error path (mocked 401): bar shows `unavailable`, --check exits 1
 - [x] Live `--json` parse: `{"providers":["◇ OpenRouter $ 0.00 ..."],"bar":"..."}`
-- [x] Live `--help`: shows all four documented flags
+- [x] Live `--help`: shows all documented flags
 
 ## Gate 4 — Context
 - [x] Files read before editing:
