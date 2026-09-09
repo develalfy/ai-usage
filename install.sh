@@ -46,7 +46,11 @@ if [ -x "$HOME/projects/ai-usage/ai-usage" ]; then
         if [ -n "$bar" ] && [ -n "${TERM:-}" ] && [ "${TERM:-}" != "dumb" ]; then
             # ponytail: --bar embeds per-segment ANSI colors already; just
             # position to the right edge, don't add another wrapper color.
-            printf '\e7\e[%dG%s\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#bar} )) "$bar"
+            # Strip ANSI escapes when measuring visible length — `${#bar}`
+            # would otherwise count them and push the bar off-screen.
+            local visible
+            visible=$(printf '%s' "$bar" | sed $'s/\\x1b\\[[0-9;]*m//g')
+            printf '\e7\e[%dG%s\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#visible} )) "$bar"
         fi
     }
     case $PROMPT_COMMAND in
