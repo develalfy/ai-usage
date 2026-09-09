@@ -223,6 +223,28 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 10. Claude Code OAuth → bar has per-segment ANSI color codes (green for 42.5%).
+mkdir -p "$TMP/claude/.claude"
+cat > "$TMP/claude/.claude/.credentials.json" <<'JSON'
+{"claudeAiOauth":{"accessToken":"fake-oauth","expiresAt":9999999999999}}
+JSON
+chmod 600 "$TMP/claude/.claude/.credentials.json"
+mkdir -p "$TMP/claude/bin"
+cat > "$TMP/claude/bin/curl" <<'SH'
+#!/usr/bin/env bash
+echo '{"five_hour":{"utilization":42.5},"seven_day":{"utilization":18.0}}'
+SH
+chmod +x "$TMP/claude/bin/curl"
+out=$(HOME="$TMP/claude" AI_USAGE_CONFIG="$TMP/claude/config" PATH="$TMP/claude/bin:$PATH" ./ai-usage --bar 2>&1)
+if [[ "$out" == *"Claude"*"\033[1;32m"*"42.5%"* ]]; then
+  echo "  PASS  oauth(claude): per-segment green color"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  oauth(claude): expected green color"
+  echo "        got: $out"
+  FAIL=$((FAIL+1))
+fi
+
 echo
 echo "----"
 echo "PASS: $PASS  FAIL: $FAIL"
