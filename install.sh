@@ -44,7 +44,9 @@ if [ -x "$HOME/projects/ai-usage/ai-usage" ]; then
         local bar
         bar=$(<"$f" 2>/dev/null || true)
         if [ -n "$bar" ] && [ -n "${TERM:-}" ] && [ "${TERM:-}" != "dumb" ]; then
-            printf '\e7\e[%dG\e[36m%s\e[0m\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#bar} )) "$bar"
+            # ponytail: --bar embeds per-segment ANSI colors already; just
+            # position to the right edge, don't add another wrapper color.
+            printf '\e7\e[%dG%s\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#bar} )) "$bar"
         fi
     }
     case $PROMPT_COMMAND in

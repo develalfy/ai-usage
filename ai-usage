@@ -487,10 +487,12 @@ print(san(val), san(extra) or '-')
       ;;
   esac
   c="1;37"; [ -n "$pct" ] && c=$(color_for "$pct")
-  short_str="$(icon_for "$short") ${name}${unit}${out}"
-  [ -n "$rextra" ] && short_str+=" (${rextra})"
-  bar+="${short_str} | "
-  shorts+="${short_str}"$'\n'
+  # ponytail: each provider segment gets its own color in BOTH --bar and rich,
+  # so the prompt line lights up red/green per-provider instead of one cyan blob.
+  short_str="$(icon_for "$short") ${name}\033[${c}m${unit}${out}\033[0m"
+  [ -n "$rextra" ] && short_str+=" \033[2m(${rextra})\033[0m"
+  bar+="${short_str} \033[38;5;244m│\033[0m "
+  shorts+="$(icon_for "$short") ${name}${unit}${out}"$'\n'
   if [ "$rich" = 1 ]; then
     line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m: \033[${c}m${unit}${out}\033[0m"
     [ -n "$rextra" ] && line+="  ($rextra)"
