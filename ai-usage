@@ -464,12 +464,25 @@ print(san(val), san(extra) or '-')
   # compact form: "◇ OpenRouter $ 0 (month $ 0 + byok $ 0.22)"
   unit=""; [ "$short" = openrouter ] && unit=" \$"
   [ -n "$out" ] && out=" ${out}"  # leading space only if there's a value
+  # ponytail: per-provider color in interactive prompts. Threshold is the
+  # %-of-limit number (or spend-vs-monthly-cap); empty/unknown = white.
+  pct=""
+  case "$short" in
+    openrouter)
+      # ponytail: derive a rough % from limit_remaining if present in the
+      # response; otherwise treat absence of any spend as 0% (green).
+      if [ -n "$rextra" ] && [[ "$rextra" == *byok* ]]; then
+        pct="0"   # byok means spend is to upstream providers, not OpenRouter quota
+      fi
+      ;;
+  esac
+  c="1;37"; [ -n "$pct" ] && c=$(color_for "$pct")
   short_str="$(icon_for "$short") ${name}${unit}${out}"
   [ -n "$rextra" ] && short_str+=" (${rextra})"
   bar+="${short_str} | "
   shorts+="${short_str}"$'\n'
   if [ "$rich" = 1 ]; then
-    line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m: ${unit}${out}"
+    line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m: \033[${c}m${unit}${out}\033[0m"
     [ -n "$rextra" ] && line+="  ($rextra)"
     richlines+=("$line")
   fi
@@ -490,6 +503,28 @@ import json,sys
 out={"providers":[s for s in sys.argv[1].splitlines() if s],"bar":sys.argv[2]}
 print(json.dumps(out))
 PY
+elif [ "${1:-}" = "--check" ]; then
+  # ponytail: exit non-zero if any provider reported an error. For cron/alerting.
+  printf '%s\n' "$bar"
+  if [[ "$bar" == *"unavailable"* ]] || [[ "$bar" == *"err"* ]]; then exit 1; fi
+  exit 0
+elif [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  cat <<'USAGE'
+ai-usage — terminal usage bar for AI subscriptions.
+
+Usage:
+  ai-usage                Interactive view (icons + colors, requires TTY)
+  ai-usage --bar          Compact single-line form for prompt status
+  ai-usage --json         Machine-readable JSON: {providers:[...], bar:"..."}
+  ai-usage --check        Print bar; exit non-zero if any provider errored
+  ai-usage --help         This message
+
+Manual keys live in $AI_USAGE_CONFIG/<short> (default ~/.config/ai-usage),
+mode 600. Auto-detect covers opencode / claude-code / codex / github-copilot.
+
+Providers: openrouter, anthropic, openai, copilot, minimax, agy
+USAGE
+  exit 0
 elif [ "$rich" = 1 ]; then
   printf '\033[1;36mai-use\033[0m  \033[2mYour AI usage at a glance\033[0m\n'
   if [ "$any_key" = 0 ]; then

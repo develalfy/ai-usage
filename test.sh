@@ -144,6 +144,32 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 6. --check exits 0 when all providers healthy.
+./ai-usage --check >/dev/null 2>&1
+if [ "$?" = 0 ]; then
+  echo "  PASS  check: exits 0 on healthy providers"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  check: should exit 0"
+  FAIL=$((FAIL+1))
+fi
+
+# 7. --help exits 0 and mentions every documented flag.
+out=$(./ai-usage --help 2>&1)
+assert_contains "help: mentions --bar"   "--bar"   "$out"
+assert_contains "help: mentions --json"  "--json"  "$out"
+assert_contains "help: mentions --check" "--check" "$out"
+
+# 8. live end-to-end: confirm --help exits 0.
+./ai-usage --help >/dev/null 2>&1
+if [ "$?" = 0 ]; then
+  echo "  PASS  help: exits 0"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  help: should exit 0"
+  FAIL=$((FAIL+1))
+fi
+
 echo
 echo "----"
 echo "PASS: $PASS  FAIL: $FAIL"

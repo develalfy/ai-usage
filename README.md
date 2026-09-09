@@ -1,11 +1,21 @@
-# ai-usage — Bash status line for AI subscriptions
+# ai-usage — terminal usage bar for AI subscriptions
 
-A compact, colorized status line above your Bash prompt. It refreshes once a minute and never shares the line where you type commands.
+A compact, colorized status line in your Bash prompt. It refreshes once a minute and never shares the line where you type commands.
 
 ```
-◆ Claude 77% │ ⬢ OpenAI 39% │ ◆ MiniMax 5h 6% · week 43%
+◇ OpenRouter $ 0.00 (month $ 0 + byok $ 0.22) │ ◆ Claude org-12345 │ ⬢ OpenAI 100.00 │  GitHub business
 you@host:~$
 ```
+
+## Flags
+
+| Flag       | What                                                              |
+|------------|-------------------------------------------------------------------|
+| (none)     | Interactive view with colors, badges, and per-provider status     |
+| `--bar`    | Compact single line — what the prompt status line uses            |
+| `--json`   | Machine-readable: `{providers:[...], bar:"..."}`                   |
+| `--check`  | Print bar; exit 1 if any provider reported an error (for cron)     |
+| `--help`   | Show usage                                                        |
 
 ## Install
 
