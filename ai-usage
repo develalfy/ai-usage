@@ -343,34 +343,42 @@ except Exception: pass
         case "$short" in
           anthropic)
             IFS='|' read -r fu su extra <<<"$out"
-            bar+="◆ Claude ${fu}%"
-            bar+=" | "
+            c1=$(color_for "$fu"); c2=$(color_for "$su")
+            bar+="$(icon_for "$short") ${name}\033[${c1}m ${fu}% 5h\033[0m"
+            [ -n "$su" ] && bar+=" \033[${c2}m${su}% 7d\033[0m"
+            bar+=" \033[38;5;244m│\033[0m "
+            shorts+="$(icon_for "$short") ${name} ${fu}% 5h${su:+ ${su}% 7d}"$'\n'
             if [ "$rich" = 1 ]; then
-              line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  \033[$(color_for "$fu")m5-hour ${fu}%\033[0m  \033[$(color_for "$su")m7-day ${su}%\033[0m"
+              line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  \033[${c1}m5-hour ${fu}%\033[0m  \033[${c2}m7-day ${su}%\033[0m"
               [ -n "$extra" ] && line+="   (${extra})"
               richlines+=("$line")
             fi
             ;;
           openai)
             IFS='|' read -r pu su extra <<<"$out"
-            bar+="⬢ OpenAI ${pu}%"
-            bar+=" | "
+            c1=$(color_for "$pu"); c2=$(color_for "$su")
+            bar+="$(icon_for "$short") ${name}\033[${c1}m ${pu}%\033[0m"
+            [ -n "$su" ] && bar+=" \033[${c2}m${su}% wk\033[0m"
+            bar+=" \033[38;5;244m│\033[0m "
+            shorts+="$(icon_for "$short") ${name} ${pu}%${su:+ ${su}% wk}"$'\n'
             if [ "$rich" = 1 ]; then
-              line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  \033[$(color_for "$pu")mshort window ${pu}%\033[0m"
-              [ -n "$su" ] && line+="  \033[$(color_for "$su")mlong window ${su}%\033[0m"
+              line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  \033[${c1}mshort window ${pu}%\033[0m"
+              [ -n "$su" ] && line+="  \033[${c2}mlong window ${su}%\033[0m"
               [ -n "$extra" ] && line+="   ($extra)"
               richlines+=("$line")
             fi
             ;;
         esac
       else
-          bar+="$(icon_for "$short") ${name} unavailable | "
+          bar+="$(icon_for "$short") ${name} unavailable \033[38;5;244m│\033[0m "
+          shorts+="$(icon_for "$short") ${name} unavailable"$'\n'
           [ "$rich" = 1 ] && richlines+=("  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  signed in, but the usage service is unavailable")
       fi
       continue
       ;;
     no-endpoint)
-       bar+="$(icon_for "$short") ${name} unavailable | "
+       bar+="$(icon_for "$short") ${name} unavailable \033[38;5;244m│\033[0m "
+       shorts+="$(icon_for "$short") ${name} unavailable"$'\n'
        [ "$rich" = 1 ] && richlines+=("  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m  installed, but no public usage service is available")
       continue
       ;;
