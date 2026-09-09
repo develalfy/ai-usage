@@ -224,6 +224,7 @@ except Exception: pass
 # Provider table: short|name|url|hdr_style|hdr_val|field
 # ponytail: fields verified live in /review pass. Empty url = endpoint not known yet.
 providers=(
+  "openrouter|OpenRouter|https://openrouter.ai/api/v1/auth/key|Authorization||data.usage_monthly"
   "anthropic|Claude|https://api.anthropic.com/v1/organizations/me|x-api-key|anthropic-version:2023-06-01|id"
   "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization||total_granted"
   "copilot|GitHub|https://api.github.com/copilot_internal/user|Authorization||copilot_plan"
@@ -427,10 +428,11 @@ except Exception: pass
   read -r out rextra <<<"$(printf '%s' "$resp" | python3 -c "
 import sys,json,re
 d=json.load(sys.stdin)
-path='$field'.split(',')
+path='$field'.split('.')
 try:
     v=d
     for k in path:
+        if not k: continue
         v=v[int(k)] if k.lstrip('-').isdigit() else v[k]
     val = f'{v:.2f}' if isinstance(v,(int,float)) else str(v)
 except Exception:
@@ -439,8 +441,15 @@ extra=''
 try:
     if '$short' == 'openrouter':
         dd=d.get('data') or {}
-        rem=dd.get('limit_remaining')
-        if rem is not None: extra=f'remaining \${rem}'
+        um=dd.get('usage_monthly')
+        bm=dd.get('byok_usage_monthly')
+        # ponytail: byok usage is paid separately to upstream providers —
+        # surface it inline so the user sees their total spend, not just the
+        # OpenRouter-routed slice.
+        if um is not None and bm:
+            extra=f'month \$ {um} + byok \$ {bm:.2f}'
+        elif um is not None:
+            extra=f'month \$ {um}'
 except Exception: pass
 # ponytail: strip backslashes/control chars — API-sourced text is later
 # rendered with `printf %b`; must not carry its own escape sequences.
@@ -449,12 +458,14 @@ print(san(val), san(extra) or '-')
 " 2>/dev/null)"
   [ -n "$out" ] || out="?"
   [ "$rextra" = "-" ] && rextra=""
-  # --bar is deliberately brief; detailed cost/plan/reset data stays in the
-  # interactive view while the prompt status line remains glanceable.
-  bar+="$(icon_for "$short") ${name}"
-  bar+=" | "
+  # ponytail: keep --bar (compact, prompt-line) and rich (interactive)
+  # in sync — a single source of truth avoids the two drifting apart.
+  # compact form: "◇ OpenRouter $ 0 (month $ 0 + byok $ 0.22)"
+  unit=""; [ "$short" = openrouter ] && unit=" \$"
+  short_str="$(icon_for "$short") ${name}${unit:+ ${unit}}${out}"
+  [ -n "$rextra" ] && short_str+=" (${rextra})"
+  bar+="${short_str} | "
   if [ "$rich" = 1 ]; then
-    unit=""; [ "$short" = openrouter ] && unit=" usage \$"
     line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m: ${unit}${out}"
     [ -n "$rextra" ] && line+="  ($rextra)"
     richlines+=("$line")
