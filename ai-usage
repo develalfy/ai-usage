@@ -235,6 +235,7 @@ providers=(
 )
 
 bar=""
+shorts=""
 any_key=0
 for entry in "${providers[@]}"; do
   IFS='|' read -r short name url hdr_style hdr_val field _ <<<"$entry"
@@ -462,9 +463,11 @@ print(san(val), san(extra) or '-')
   # in sync — a single source of truth avoids the two drifting apart.
   # compact form: "◇ OpenRouter $ 0 (month $ 0 + byok $ 0.22)"
   unit=""; [ "$short" = openrouter ] && unit=" \$"
-  short_str="$(icon_for "$short") ${name}${unit:+ ${unit}}${out}"
+  [ -n "$out" ] && out=" ${out}"  # leading space only if there's a value
+  short_str="$(icon_for "$short") ${name}${unit}${out}"
   [ -n "$rextra" ] && short_str+=" (${rextra})"
   bar+="${short_str} | "
+  shorts+="${short_str}"$'\n'
   if [ "$rich" = 1 ]; then
     line="  $(badge_for "$short") $(icon_for "$short") ${name} \033[0m: ${unit}${out}"
     [ -n "$rextra" ] && line+="  ($rextra)"
@@ -479,6 +482,14 @@ bar="${bar% | }"
 
 if [ "${1:-}" = "--bar" ]; then
   printf '%s' "$bar"
+elif [ "${1:-}" = "--json" ]; then
+  # ponytail: shell-safe JSON emit — interpolate then escape in python.
+  # Avoids pulling in jq just for one line of output.
+  python3 - "$shorts" "$bar" <<'PY' || true
+import json,sys
+out={"providers":[s for s in sys.argv[1].splitlines() if s],"bar":sys.argv[2]}
+print(json.dumps(out))
+PY
 elif [ "$rich" = 1 ]; then
   printf '\033[1;36mai-use\033[0m  \033[2mYour AI usage at a glance\033[0m\n'
   if [ "$any_key" = 0 ]; then
