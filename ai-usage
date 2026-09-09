@@ -517,6 +517,7 @@ Usage:
   ai-usage --bar          Compact single-line form for prompt status
   ai-usage --json         Machine-readable JSON: {providers:[...], bar:"..."}
   ai-usage --check        Print bar; exit non-zero if any provider errored
+  ai-usage --version      Print version and exit
   ai-usage --help         This message
 
 Manual keys live in $AI_USAGE_CONFIG/<short> (default ~/.config/ai-usage),
@@ -524,6 +525,9 @@ mode 600. Auto-detect covers opencode / claude-code / codex / github-copilot.
 
 Providers: openrouter, anthropic, openai, copilot, minimax, agy
 USAGE
+  exit 0
+elif [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
+  echo "ai-usage 0.2.0"
   exit 0
 elif [ "$rich" = 1 ]; then
   printf '\033[1;36mai-use\033[0m  \033[2mYour AI usage at a glance\033[0m\n'

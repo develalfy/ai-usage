@@ -1,0 +1,20 @@
+name: selftest
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run selftest
+        run: ./test.sh
+      - name: Smoke check the script
+        run: |
+          chmod +x ./ai-usage ./install.sh ./test.sh
+          ./ai-usage --help
+          ./ai-usage --version || echo "no --version (expected)"
+          bash -n ./install.sh
+          bash -n ./test.sh
