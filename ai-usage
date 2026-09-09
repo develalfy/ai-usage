@@ -615,8 +615,8 @@ PY
 elif [ "${1:-}" = "--check" ]; then
   # ponytail: exit non-zero if any provider reported an error. For cron/alerting.
   # Prints the bar AND which providers errored, so cron output is actionable.
-  printf '%s\n' "$bar"
-  errs=$(printf '%s\n' "$shorts" | grep -E 'unavailable|err' || true)
+  printf '%b\n' "$bar"
+  errs=$(printf '%b' "$shorts" | grep -E 'unavailable|err' || true)
   if [ -n "$errs" ]; then
     printf 'errors:\n%s\n' "$errs" >&2
     exit 1
@@ -651,5 +651,6 @@ elif [ "$rich" = 1 ]; then
     for l in "${richlines[@]}"; do printf '%b\n' "$l"; done
   fi
 else
-  printf '\033[1;36mai-use\033[0m  %s\n' "$bar"
+  # ponytail: %b so the literal '\033' stored in $bar becomes real ESC.
+  printf '\033[1;36mai-use\033[0m  %b\n' "$bar"
 fi
