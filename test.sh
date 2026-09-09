@@ -170,6 +170,26 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 9. error response → bar shows 'unavailable', --check exits 1.
+mkdir -p "$TMP/errtest"
+echo "fakekey" > "$TMP/errtest/openrouter"; chmod 600 "$TMP/errtest/openrouter"
+mkdir -p "$TMP/errtest/bin"
+cat > "$TMP/errtest/bin/curl" <<'SH'
+#!/usr/bin/env bash
+echo '{"error":{"message":"Missing Authentication header","code":401}}'
+SH
+chmod +x "$TMP/errtest/bin/curl"
+out=$(HOME="$TMP/errtest" AI_USAGE_CONFIG="$TMP/errtest" PATH="$TMP/errtest/bin:$PATH" ./ai-usage --bar 2>&1)
+assert_contains "error-path: bar shows unavailable" "unavailable" "$out"
+HOME="$TMP/errtest" AI_USAGE_CONFIG="$TMP/errtest" PATH="$TMP/errtest/bin:$PATH" ./ai-usage --check >/dev/null 2>&1
+if [ "$?" = 1 ]; then
+  echo "  PASS  error-path: --check exits 1"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  error-path: --check should exit 1"
+  FAIL=$((FAIL+1))
+fi
+
 echo
 echo "----"
 echo "PASS: $PASS  FAIL: $FAIL"

@@ -428,7 +428,17 @@ except Exception: pass
   resp=$(curl -s --max-time 4 -H "$auth_style: $hdr_key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
   read -r out rextra <<<"$(printf '%s' "$resp" | python3 -c "
 import sys,json,re
-d=json.load(sys.stdin)
+raw=sys.stdin.read()
+# ponytail: surface top-level API errors as 'unavailable' instead of '?' so
+# the cron --check mode catches them and the prompt-line doesn't lie.
+if '\"error\"' in raw[:200] or '\"message\":\"Missing' in raw:
+    print('unavailable -')
+    sys.exit(0)
+try:
+    d=json.loads(raw)
+except Exception:
+    print('? -')
+    sys.exit(0)
 path='$field'.split('.')
 try:
     v=d
