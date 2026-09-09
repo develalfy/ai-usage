@@ -505,8 +505,13 @@ print(json.dumps(out))
 PY
 elif [ "${1:-}" = "--check" ]; then
   # ponytail: exit non-zero if any provider reported an error. For cron/alerting.
+  # Prints the bar AND which providers errored, so cron output is actionable.
   printf '%s\n' "$bar"
-  if [[ "$bar" == *"unavailable"* ]] || [[ "$bar" == *"err"* ]]; then exit 1; fi
+  errs=$(printf '%s\n' "$shorts" | grep -E 'unavailable|err' || true)
+  if [ -n "$errs" ]; then
+    printf 'errors:\n%s\n' "$errs" >&2
+    exit 1
+  fi
   exit 0
 elif [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   cat <<'USAGE'
