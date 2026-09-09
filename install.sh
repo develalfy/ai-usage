@@ -26,13 +26,18 @@ else
   : > "$TMP"
 fi
 
-cat >> "$TMP" <<'EOF'
+# Note: heredoc indented with spaces so the installed block in bashrc is
+# itself indented, matching the rest of the file. Use `<<-EOF` would strip
+# tabs only; we use `<<'EOF'` (literal) so the 8-space indent is preserved.
+cat >> "$TMP" <<'BLOCK'
 
 # >>> ai-usage-bar >>>
 # ai-usage-bar — terminal usage bar for AI subscriptions
 if [ -x "$HOME/projects/ai-usage/ai-usage" ]; then
     _ai_bar() {
-        local f=/tmp/ai-usage.bar
+        # ponytail: per-PID cache file avoids a write race when multiple
+        # shells prompt at the same time and all stomp /tmp/ai-usage.bar.
+        local f="/tmp/ai-usage.bar.$$"
         if [ ! -f "$f" ] || [ $(( $(date +%s) - $(stat -c %Y "$f" 2>/dev/null || echo 0) )) -gt 60 ]; then
             "$HOME/projects/ai-usage/ai-usage" --bar > "$f" 2>/dev/null || true
         fi
@@ -41,14 +46,14 @@ if [ -x "$HOME/projects/ai-usage/ai-usage" ]; then
         if [ -n "$bar" ] && [ -n "${TERM:-}" ] && [ "${TERM:-}" != "dumb" ]; then
             printf '\e7\e[%dG\e[36m%s\e[0m\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#bar} )) "$bar"
         fi
-    fi
+    }
     case $PROMPT_COMMAND in
       *_ai_bar*) ;;
       *) PROMPT_COMMAND="_ai_bar;$PROMPT_COMMAND" ;;
     esac
 fi
 # <<< ai-usage-bar <<<
-EOF
+BLOCK
 mv "$TMP" "$BASHRC"
 
 # ----- Step 2: fetch latest source (best-effort). -------------------------
