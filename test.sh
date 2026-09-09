@@ -181,6 +181,17 @@ out=$(./ai-usage --help 2>&1)
 assert_contains "help: mentions --bar"   "--bar"   "$out"
 assert_contains "help: mentions --json"  "--json"  "$out"
 assert_contains "help: mentions --check" "--check" "$out"
+assert_contains "help: mentions --version" "--version" "$out"
+
+# 7b. --version exits 0 and prints a version string.
+out=$(./ai-usage --version 2>&1)
+if [[ "$out" == ai-usage* ]] && [ "${#out}" -lt 50 ]; then
+  echo "  PASS  version: prints short version string"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  version: got '$out'"
+  FAIL=$((FAIL+1))
+fi
 
 # 8. live end-to-end: confirm --help exits 0.
 ./ai-usage --help >/dev/null 2>&1
