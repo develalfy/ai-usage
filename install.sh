@@ -48,9 +48,11 @@ if [ -x "$HOME/projects/ai-usage/ai-usage" ]; then
             # position to the right edge, don't add another wrapper color.
             # Strip ANSI escapes when measuring visible length — `${#bar}`
             # would otherwise count them and push the bar off-screen.
+            # %b (not %s) so the literal '\033' stored in $bar is interpreted
+            # as the ESC byte — otherwise the terminal would render literal text.
             local visible
-            visible=$(printf '%s' "$bar" | sed $'s/\\x1b\\[[0-9;]*m//g')
-            printf '\e7\e[%dG%s\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#visible} )) "$bar"
+            visible=$(printf '%b' "$bar" | sed 's/\x1b\[[0-9;]*m//g')
+            printf '\e7\e[%dG%b\e8' $(( $(tput cols 2>/dev/null || echo 80) - ${#visible} )) "$bar"
         fi
     }
     case $PROMPT_COMMAND in

@@ -130,7 +130,9 @@ assert_contains "perms: warns on 644" "WARN" "$err"
 # 4b. openrouter bar includes color codes (green when under cap).
 # The fixture has limit=50 and usage_monthly=12.34 → pct≈25 → color 1;32 (green).
 out=$(./ai-usage --bar 2>&1)
-if [[ "$out" == *"\033[1;32m"* ]]; then
+# ponytail: bar stores literal "\033" in $bar and prints with `printf %b`,
+# so the on-the-wire bytes are real ESC. Match with actual ESC.
+if [[ "$out" == *$'\033[1;32m'* ]]; then
   echo "  PASS  color: green ANSI on low utilization"
   PASS=$((PASS+1))
 else
@@ -140,7 +142,7 @@ else
 fi
 
 # 4c. bar ends with the gray separator "│".
-if [[ "$out" == *"\033[38;5;244m│\033[0m"* ]]; then
+if [[ "$out" == *$'\033[38;5;244m│\033[0m'* ]]; then
   echo "  PASS  color: gray separator"
   PASS=$((PASS+1))
 else
@@ -236,7 +238,7 @@ echo '{"five_hour":{"utilization":42.5},"seven_day":{"utilization":18.0}}'
 SH
 chmod +x "$TMP/claude/bin/curl"
 out=$(HOME="$TMP/claude" AI_USAGE_CONFIG="$TMP/claude/config" PATH="$TMP/claude/bin:$PATH" ./ai-usage --bar 2>&1)
-if [[ "$out" == *"Claude"*"\033[1;32m"*"42.5%"* ]]; then
+if [[ "$out" == *"Claude"*$'\033[1;32m'*"42.5%"* ]]; then
   echo "  PASS  oauth(claude): per-segment green color"
   PASS=$((PASS+1))
 else

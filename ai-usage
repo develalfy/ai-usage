@@ -49,7 +49,11 @@ badge_for() {
   esac
 }
 rich=1
+# ponytail: respect NO_COLOR (https://no-color.org/) and --no-color flag.
+[ "${NO_COLOR:-}" ] && rich=0
+[ "${1:-}" = "--no-color" ] && { rich=0; NO_COLOR=1; shift; }
 [ "${1:-}" = "--bar" ] && rich=0
+[ "${1:-}" = "--bar" ] && rich=0                       # recheck after --no-color shift
 [ -t 1 ] || rich=0   # no color/multi-line when piped (e.g. into PROMPT_COMMAND capture)
 richlines=()
 
@@ -591,7 +595,15 @@ bar="${bar% | }"
 [ "$any_key" = 0 ] && bar="(no AI keys — drop one in ~/.config/ai-usage/<short>, mode 600)"
 
 if [ "${1:-}" = "--bar" ]; then
-  printf '%s' "$bar"
+  if [ -n "${NO_COLOR:-}" ]; then
+    # ponytail: strip ANSI escapes from bar when user opted out of color.
+    # The sed pattern uses a real ESC byte (^[), not the textual \x1b.
+    printf '%b' "$bar" | sed 's/\x1b\[[0-9;]*m//g'
+  else
+    # ponytail: %b interprets the literal '\033' stored in $bar back to ESC.
+    # printf '%s' would emit the 4 characters \033 literally (no color).
+    printf '%b' "$bar"
+  fi
 elif [ "${1:-}" = "--json" ]; then
   # ponytail: shell-safe JSON emit — interpolate then escape in python.
   # Avoids pulling in jq just for one line of output.
