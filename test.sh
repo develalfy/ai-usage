@@ -245,6 +245,42 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 11. malformed manual key (whitespace) → warns on stderr, bar shows no provider.
+mkdir -p "$TMP/badkey"
+printf 'this is not a key, it has spaces\n' > "$TMP/badkey/openrouter"
+chmod 600 "$TMP/badkey/openrouter"
+err=$(HOME="$TMP/badkey" AI_USAGE_CONFIG="$TMP/badkey" ./ai-usage --bar 2>&1 1>/dev/null)
+if [[ "$err" == *"whitespace"* ]]; then
+  echo "  PASS  malformed-key: warns on whitespace"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  malformed-key: expected whitespace warning"
+  echo "        got: $err"
+  FAIL=$((FAIL+1))
+fi
+
+# 12. manual key file containing JSON → extracts 'key' field, not raw blob.
+mkdir -p "$TMP/jsonkey"
+cat > "$TMP/jsonkey/openrouter" <<'JSON'
+{"key":"sk-or-extracted-from-json","label":"my key"}
+JSON
+chmod 600 "$TMP/jsonkey/openrouter"
+mkdir -p "$TMP/jsonkey/bin"
+cat > "$TMP/jsonkey/bin/curl" <<'SH'
+#!/usr/bin/env bash
+echo '{"data":{"usage_monthly":42.0,"limit":100}}'
+SH
+chmod +x "$TMP/jsonkey/bin/curl"
+out=$(HOME="$TMP/jsonkey" AI_USAGE_CONFIG="$TMP/jsonkey" PATH="$TMP/jsonkey/bin:$PATH" ./ai-usage --bar 2>&1)
+if [[ "$out" == *"42.00"* ]]; then
+  echo "  PASS  json-key: extracts 'key' field from JSON blob"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  json-key: expected real number"
+  echo "        got: $out"
+  FAIL=$((FAIL+1))
+fi
+
 echo
 echo "----"
 echo "PASS: $PASS  FAIL: $FAIL"
