@@ -139,6 +139,16 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 4c. bar ends with the gray separator "│".
+if [[ "$out" == *"\033[38;5;244m│\033[0m"* ]]; then
+  echo "  PASS  color: gray separator"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  color: expected gray separator"
+  echo "        got: $out"
+  FAIL=$((FAIL+1))
+fi
+
 # 5. JSON mode (parseable, dict with providers list).
 out=$(./ai-usage --json 2>&1)
 if echo "$out" | python3 -c '
