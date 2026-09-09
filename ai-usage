@@ -2,8 +2,8 @@
 # ai-usage — one-line usage bar for AI subscriptions.
 # Auto-detects keys from installed agent CLIs; falls back to manual keys in
 # $AI_USAGE_CONFIG/<short> (default ~/.config/ai-usage).
-# Usage: ai-usage [--bar]
-# ponytail: hardcoded endpoint list — extend when adding a provider.
+# Usage: ai-usage [--bar|--json|--check|--help]
+# ponytail: hardcoded provider table — extend when adding a provider.
 
 set -u
 DIR="${AI_USAGE_CONFIG:-$HOME/.config/ai-usage}"
@@ -31,7 +31,7 @@ icon_for() {
     openrouter) printf '\xe2\x97\x87' ;;   # ◇
     anthropic)  printf '\xe2\x97\x86' ;;   # ◆
     openai)     printf '\xe2\xac\xa2' ;;   # ⬢
-    copilot)    printf '\xef\x84\x9b' ;;   # (falls back fine as plain glyph)
+    copilot)    printf '\xe2\x8c\x98' ;;   # ⊘ (was a PUA glyph — fall back to a printable)
     minimax)    printf '\xe2\x97\x86' ;;   # ◆
     agy)        printf '\xe2\x96\xb3' ;;   # △
     *) printf '*' ;;
