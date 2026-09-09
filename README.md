@@ -70,6 +70,7 @@ MiniMax uses the International Token Plan endpoint (`api.minimax.io`). A China-r
 ```bash
 ai-usage            # detailed, multi-line view in an interactive terminal
 ai-usage --bar      # compact line used by the Bash prompt integration (ANSI-colored)
+ai-usage --no-color # same as --bar but with ANSI codes stripped (also honors $NO_COLOR)
 ai-usage --json     # {providers:[...], bar:"..."} for piping into scripts
 ai-usage --check    # print bar; exit 1 if any provider errored (cron/alerting)
 ai-usage --version  # print version and exit

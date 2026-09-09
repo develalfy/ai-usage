@@ -283,6 +283,29 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 13. --no-color strips ANSI from --bar.
+out=$(./ai-usage --no-color --bar 2>&1)
+# ponytail: bar stores literal "\033" in $bar and prints with `printf %b`,
+# so on the wire bytes are real ESC. --no-color must strip them entirely.
+if [[ "$out" != *$'\033'* ]]; then
+  echo "  PASS  no-color: bar has no ANSI escapes"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  no-color: bar still contains ESC bytes"
+  echo "        got: $(od -An -c <<<\"$out\" | head -1)"
+  FAIL=$((FAIL+1))
+fi
+
+# 14. NO_COLOR=1 env var also strips colors.
+out=$(NO_COLOR=1 ./ai-usage --bar 2>&1)
+if [[ "$out" != *$'\033'* ]]; then
+  echo "  PASS  NO_COLOR: env var strips colors"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  NO_COLOR: env var did not strip colors"
+  FAIL=$((FAIL+1))
+fi
+
 echo
 echo "----"
 echo "PASS: $PASS  FAIL: $FAIL"

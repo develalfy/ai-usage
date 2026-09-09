@@ -629,10 +629,13 @@ ai-usage — terminal usage bar for AI subscriptions.
 Usage:
   ai-usage                Interactive view (icons + colors, requires TTY)
   ai-usage --bar          Compact single-line form for prompt status
+  ai-usage --no-color     Like --bar but with ANSI escapes stripped
   ai-usage --json         Machine-readable JSON: {providers:[...], bar:"..."}
   ai-usage --check        Print bar; exit non-zero if any provider errored
   ai-usage --version      Print version and exit
   ai-usage --help         This message
+
+$NO_COLOR=1 is also honored (https://no-color.org/).
 
 Manual keys live in $AI_USAGE_CONFIG/<short> (default ~/.config/ai-usage),
 mode 600. Auto-detect covers opencode / claude-code / codex / github-copilot.
