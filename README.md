@@ -27,10 +27,23 @@ source ~/.bashrc
 
 The installer is idempotent: run it again after updating the checkout.
 
+## Test
+
+The repo ships a self-test that mocks HTTP and exercises every code path
+(file-mode key, auto-detect, JSON extract, perms warning, no-key path,
+`--json`, `--check`, `--help`). 18 assertions, all pass.
+
+```bash
+cd ~/projects/ai-usage && ./test.sh
+```
+
+CI runs this on every push via `.github/workflows/selftest.yml`.
+
 ## What it shows
 
 | Provider | Subscription data |
 |---|---|
+| OpenRouter | Current monthly spend (direct + byok to upstream providers) |
 | Claude Code | Current 5-hour usage window (detailed view also shows 7-day usage) |
 | Codex / ChatGPT | Current short rate-limit window (detailed view also shows the long window, reset time, plan, and spend control) |
 | MiniMax Coding Plan | Current 5-hour and weekly quota usage |
