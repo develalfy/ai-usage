@@ -426,18 +426,20 @@ except Exception: pass
     continue
   fi
   resp=$(curl -s --max-time 4 -H "$auth_style: $hdr_key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
-  read -r out rextra <<<"$(printf '%s' "$resp" | python3 -c "
+  IFS=$'\t' read -r out rextra pct <<<"$(printf '%s' "$resp" | python3 -c "
 import sys,json,re
 raw=sys.stdin.read()
 # ponytail: surface top-level API errors as 'unavailable' instead of '?' so
 # the cron --check mode catches them and the prompt-line doesn't lie.
-if '\"error\"' in raw[:200] or '\"message\":\"Missing' in raw:
-    print('unavailable -')
+# Match a real {"error":...} at the top of the body, not the literal
+# substring "error" (which every JSON object contains as a key name).
+if raw.lstrip().startswith('{\"error\"') or raw.lstrip().startswith('[{\"error\"'):
+    print('unavailable' + chr(9) + '-' + chr(9) + '-')
     sys.exit(0)
 try:
     d=json.loads(raw)
 except Exception:
-    print('? -')
+    print('?' + chr(9) + '-' + chr(9) + '-')
     sys.exit(0)
 path='$field'.split('.')
 try:
@@ -449,23 +451,28 @@ try:
 except Exception:
     val='?'
 extra=''
+pct=''
 try:
     if '$short' == 'openrouter':
         dd=d.get('data') or {}
         um=dd.get('usage_monthly')
         bm=dd.get('byok_usage_monthly')
+        lim=dd.get('limit')
         # ponytail: byok usage is paid separately to upstream providers —
-        # surface it inline so the user sees their total spend, not just the
-        # OpenRouter-routed slice.
+        # surface it inline so the user sees their total spend, not just
+        # the OpenRouter-routed slice.
         if um is not None and bm:
-            extra=f'month \$ {um} + byok \$ {bm:.2f}'
+            extra=f'month \\$ {um} + byok \\$ {bm:.2f}'
         elif um is not None:
-            extra=f'month \$ {um}'
+            extra=f'month \\$ {um}'
+        # Color threshold: % of monthly cap consumed (only when a cap exists).
+        if lim and lim > 0 and um is not None:
+            pct = f'{min(100, 100*float(um)/float(lim)):.0f}'
 except Exception: pass
 # ponytail: strip backslashes/control chars — API-sourced text is later
 # rendered with `printf %b`; must not carry its own escape sequences.
-san = lambda s: re.sub(r'[\\\\\x00-\x1f]', '', s)
-print(san(val), san(extra) or '-')
+san = lambda s: re.sub(r'[\\\\\\x00-\\x1f]', '', s)
+print(san(val) + chr(9) + (san(extra) or '-') + chr(9) + (san(pct) or '-'))
 " 2>/dev/null)"
   [ -n "$out" ] || out="?"
   [ "$rextra" = "-" ] && rextra=""
