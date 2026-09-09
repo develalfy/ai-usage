@@ -607,7 +607,14 @@ if [ "${1:-}" = "--bar" ]; then
 elif [ "${1:-}" = "--json" ]; then
   # ponytail: shell-safe JSON emit — interpolate then escape in python.
   # Avoids pulling in jq just for one line of output.
-  python3 - "$shorts" "$bar" <<'PY' || true
+  # Strip ANSI from the bar when NO_COLOR is set so JSON consumers get
+  # parseable plain text (otherwise the bar field contains ESC bytes).
+  if [ -n "${NO_COLOR:-}" ]; then
+    bar_json=$(printf '%b' "$bar" | sed 's/\x1b\[[0-9;]*m//g')
+  else
+    bar_json=$(printf '%b' "$bar")
+  fi
+  python3 - "$shorts" "$bar_json" <<'PY' || true
 import json,sys
 out={"providers":[s for s in sys.argv[1].splitlines() if s],"bar":sys.argv[2]}
 print(json.dumps(out))
