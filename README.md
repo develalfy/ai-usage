@@ -68,9 +68,17 @@ MiniMax uses the International Token Plan endpoint (`api.minimax.io`). A China-r
 ## Commands
 
 ```bash
-ai-usage          # detailed, multi-line view in an interactive terminal
-ai-usage --bar    # compact, plain line used by the Bash prompt integration
+ai-usage            # detailed, multi-line view in an interactive terminal
+ai-usage --bar      # compact line used by the Bash prompt integration (ANSI-colored)
+ai-usage --json     # {providers:[...], bar:"..."} for piping into scripts
+ai-usage --check    # print bar; exit 1 if any provider errored (cron/alerting)
+ai-usage --version  # print version and exit
 ```
+
+The `--bar` form embeds per-segment ANSI colors (green/yellow/red based on
+the provider's utilization) so the prompt line lights up at a glance when
+something is in trouble. The Bash prompt integration places `--bar` on the
+right edge of the terminal without taking the typing line.
 
 The prompt integration caches the compact status line at `/tmp/ai-usage.bar.$UID` for 60 seconds. Force a refresh:
 
