@@ -31,7 +31,7 @@ icon_for() {
     openrouter) printf '\xe2\x97\x87' ;;   # ◇
     anthropic)  printf '\xe2\x97\x86' ;;   # ◆
     openai)     printf '\xe2\xac\xa2' ;;   # ⬢
-    copilot)    printf '\xe2\x8c\x98' ;;   # ⊘ (was a PUA glyph — fall back to a printable)
+    copilot)    printf '\xe2\x9c\x89' ;;   # ✉ (envelope — github/email vibe)
     minimax)    printf '\xe2\x97\x86' ;;   # ◆
     agy)        printf '\xe2\x96\xb3' ;;   # △
     *) printf '*' ;;
