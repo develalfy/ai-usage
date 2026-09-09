@@ -491,7 +491,7 @@ done
 # Keep the cached bar's plain form compact and make every separator intentional.
 bar="${bar% | }"
 
-[ "$any_key" = 0 ] && bar="No providers connected · add a key in ~/.config/ai-usage/"
+[ "$any_key" = 0 ] && bar="(no AI keys — drop one in ~/.config/ai-usage/<short>, mode 600)"
 
 if [ "${1:-}" = "--bar" ]; then
   printf '%s' "$bar"

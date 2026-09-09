@@ -117,7 +117,7 @@ assert_contains "rich: copilot"    "GitHub"     "$out"
 empty_home="$TMP/emptyhome"
 mkdir -p "$empty_home/.config/ai-usage"  # empty AI_USAGE_CONFIG subdir
 out=$(HOME="$empty_home" AI_USAGE_CONFIG="$empty_home/.config/ai-usage" ./ai-usage --bar 2>&1)
-assert_contains "no-keys: helpful msg" "No providers connected" "$out"
+assert_contains "no-keys: helpful msg" "no AI keys" "$out"
 
 # 4. file-perm warning: drop a 644 key, expect WARN on stderr.
 sandbox="$TMP/perm"
