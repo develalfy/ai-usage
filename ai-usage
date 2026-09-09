@@ -69,14 +69,24 @@ detect() {
         [ -f "$file" ] || continue
         k=$(python3 -c "
 import sys,json
-d=json.load(open('$file'))
+try:
+    d=json.load(open('$file'))
+except Exception as e:
+    # ponytail: warn when an auth file is unreadable JSON. Without this,
+    # the literal file contents leak into the Authorization header and
+    # silently produce '?' in the bar (the user thinks the API broke).
+    print(f'WARN: $file: {e}', file=sys.stderr)
+    sys.exit(1)
 v=d
 try:
     for k in '${jqpath#.}'.split('.'):
         if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
     print(v) if isinstance(v,str) and v else None
 except Exception: pass
-" 2>/dev/null)
+" 2>&1)
+        # ponytail: a JSON parse error must not promote the raw file text
+        # to a credential — the line above writes a warning, drop the key.
+        [[ "$k" == WARN:* ]] && continue
         [ -n "$k" ] && { echo "Authorization|$k"; return; }
       done
       ;;
@@ -129,14 +139,24 @@ except Exception: pass
         [ -f "$file" ] || continue
         k=$(python3 -c "
 import sys,json
-d=json.load(open('$file'))
+try:
+    d=json.load(open('$file'))
+except Exception as e:
+    # ponytail: warn when an auth file is unreadable JSON. Without this,
+    # the literal file contents leak into the Authorization header and
+    # silently produce '?' in the bar (the user thinks the API broke).
+    print(f'WARN: $file: {e}', file=sys.stderr)
+    sys.exit(1)
 v=d
 try:
     for k in '${jqpath#.}'.split('.'):
         if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
     print(v) if isinstance(v,str) and v else None
 except Exception: pass
-" 2>/dev/null)
+" 2>&1)
+        # ponytail: a JSON parse error must not promote the raw file text
+        # to a credential — the line above writes a warning, drop the key.
+        [[ "$k" == WARN:* ]] && continue
         [ -n "$k" ] && { echo "Authorization|$k"; return; }
       done
       if [ -f "$HOME/.codex/auth.json" ]; then
@@ -166,14 +186,24 @@ except Exception: pass
         [ -f "$file" ] || continue
         k=$(python3 -c "
 import sys,json
-d=json.load(open('$file'))
+try:
+    d=json.load(open('$file'))
+except Exception as e:
+    # ponytail: warn when an auth file is unreadable JSON. Without this,
+    # the literal file contents leak into the Authorization header and
+    # silently produce '?' in the bar (the user thinks the API broke).
+    print(f'WARN: $file: {e}', file=sys.stderr)
+    sys.exit(1)
 v=d
 try:
     for k in '${jqpath#.}'.split('.'):
         if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
     print(v) if isinstance(v,str) and v else None
 except Exception: pass
-" 2>/dev/null)
+" 2>&1)
+        # ponytail: a JSON parse error must not promote the raw file text
+        # to a credential — the line above writes a warning, drop the key.
+        [[ "$k" == WARN:* ]] && continue
         [ -n "$k" ] && { echo "Authorization|$k"; return; }
       done
       ;;
@@ -249,8 +279,45 @@ for entry in "${providers[@]}"; do
       [67][06][06]) ;;
       *) printf 'ai-use  WARN: %s is mode %s (want 600)\n' "$DIR/$short" "${perms:-?}" >&2 ;;
     esac
-    detected="${hdr_style}|$(<"$DIR/$short")"
-    src="file"
+    # ponytail: manual keys are usually a single token (one line, no JSON).
+    # Strip whitespace and use as-is. If the user pasted JSON by accident
+    # (e.g. `cat ~/.claude.json > ~/.config/ai-usage/openrouter`), parse
+    # it and extract a single string field — otherwise the entire blob
+    # would go into the Authorization header and silently produce '?'.
+    raw=$(<"$DIR/$short")
+    if [[ "$raw" == \{* ]]; then
+      # ponytail: looks like JSON — try to extract a string field.
+      # ponytail: prefer 'key', then 'api_key', then the first string we find.
+      k=$(printf '%s' "$raw" | python3 -c "
+import sys, json
+try:
+    d=json.loads(sys.stdin.read())
+    if isinstance(d,dict):
+        for f in ('key','api_key','token','accessToken'):
+            if isinstance(d.get(f),str) and d[f]:
+                print(d[f]); sys.exit(0)
+        for v in d.values():
+            if isinstance(v,str) and v: print(v); sys.exit(0)
+except Exception:
+    pass
+" 2>/dev/null)
+      if [ -n "$k" ]; then
+        detected="${hdr_style}|$k"
+        src="file"
+      else
+        printf 'ai-use  WARN: %s looks like JSON but has no usable key field\n' "$DIR/$short" >&2
+      fi
+    else
+      # ponytail: a real API key is a single token with no whitespace.
+      # Reject anything with a space/newline/tab — the user probably pasted
+      # a JSON blob or other content into the file by accident.
+      if [[ "$raw" == *' '* || "$raw" == *$'\n'* || "$raw" == *$'\t'* ]]; then
+        printf 'ai-use  WARN: %s contains whitespace — manual keys should be a single token, not a JSON blob. Drop one of: key, api_key, token, accessToken\n' "$DIR/$short" >&2
+      else
+        detected="${hdr_style}|${raw}"
+        src="file"
+      fi
+    fi
   fi
   # 2) auto-detect from installed agent CLI auth (fallback)
   [ -z "$detected" ] && detected=$(detect "$short")
