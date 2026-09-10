@@ -205,6 +205,28 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# 8b. error-path: bar shows 'unavailable' WITHOUT a '$' prefix.
+# ponytail: a real bug was '$ unavailable' (the openrouter '$' unit prefix
+# was applied unconditionally, even when the value was an error string).
+mkdir -p "$TMP/errmsgbar"
+echo "fakekey" > "$TMP/errmsgbar/openrouter"; chmod 600 "$TMP/errmsgbar/openrouter"
+mkdir -p "$TMP/errmsgbar/bin"
+cat > "$TMP/errmsgbar/bin/curl" <<'SH'
+#!/usr/bin/env bash
+echo '{"error":{"message":"rate limited"}}'
+SH
+chmod +x "$TMP/errmsgbar/bin/curl"
+out=$(HOME="$TMP/errmsgbar" AI_USAGE_CONFIG="$TMP/errmsgbar" PATH="$TMP/errmsgbar/bin:$PATH" ./ai-usage --bar 2>&1)
+visible=$(printf '%b' "$out" | sed 's/\x1b\[[0-9;]*m//g')
+if [[ "$visible" == *"OpenRouter unavailable"* ]] && [[ "$visible" != *"\$ unavailable"* ]]; then
+  echo "  PASS  error-path: bar shows 'unavailable' (no '\$' prefix)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  error-path: expected 'OpenRouter unavailable' without '\$'"
+  echo "        got: $visible"
+  FAIL=$((FAIL+1))
+fi
+
 # 9. error response → bar shows 'unavailable', --check exits 1.
 mkdir -p "$TMP/errtest"
 echo "fakekey" > "$TMP/errtest/openrouter"; chmod 600 "$TMP/errtest/openrouter"
