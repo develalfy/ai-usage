@@ -20,12 +20,6 @@ color_for() { # $1=percent (may be empty/non-numeric) -> ansi color code
     else print "1;32";
   }'
 }
-fmt_secs() { # $1=seconds -> "4h12m" / "37m" (empty on bad input)
-  local s="${1:-}"
-  case "$s" in ''|*[!0-9]*) return ;; esac
-  local h=$((s/3600)) m=$(((s%3600)/60))
-  if [ "$h" -gt 0 ]; then printf '%dh%dm' "$h" "$m"; else printf '%dm' "$m"; fi
-}
 icon_for() {
   case "$1" in
     openrouter) printf '\xe2\x97\x87' ;;   # ◇
