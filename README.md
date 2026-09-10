@@ -47,6 +47,7 @@ CI runs this on every push via `.github/workflows/selftest.yml`.
 | OpenRouter | Current monthly spend (direct + byok to upstream providers), with ANSI color threshold |
 | Claude Code | Current 5-hour + 7-day usage windows (Claude Code OAuth), with ANSI color threshold |
 | Codex / ChatGPT | Current short rate-limit window (Codex ChatGPT OAuth), with ANSI color threshold |
+| OpenAI (API key) | Credits consumed in the current billing period (dashboard `/v1/dashboard/billing/credit_grants`) |
 | MiniMax Coding Plan | Current 5-hour and weekly quota usage, with ANSI color threshold |
 | GitHub Copilot | Plan (when credential format is supported) |
 | Agy / Antigravity | Shown as unavailable: no public usage endpoint exists |
