@@ -305,7 +305,25 @@ else
   FAIL=$((FAIL+1))
 fi
 
-# 13. --no-color strips ANSI from --bar.
+# 10b. GitHub Copilot auto-detect from `hosts.json` — `github.com` is a key
+# with a literal dot in its name, which the generic dot-walker can't handle.
+mkdir -p "$TMP/copilot"
+mkdir -p "$TMP/copilot/.config/github-copilot"
+cat > "$TMP/copilot/.config/github-copilot/hosts.json" <<'JSON'
+{"github.com":{"oauth_token":"gh-fake-token","user":"octocat"}}
+JSON
+out=$(HOME="$TMP/copilot" AI_USAGE_CONFIG="$TMP/copilot" ./ai-usage --bar 2>&1)
+visible=$(printf '%b' "$out" | sed 's/\x1b\[[0-9;]*m//g')
+if [[ "$visible" == *"GitHub"* ]]; then
+  echo "  PASS  copilot: dotted-key ('github.com') detected"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  copilot: expected 'GitHub' segment in bar"
+  echo "        got: $visible"
+  FAIL=$((FAIL+1))
+fi
+
+# 11. --no-color strips ANSI from --bar.
 out=$(./ai-usage --no-color --bar 2>&1)
 # ponytail: bar stores literal "\033" in $bar and prints with `printf %b`,
 # so on the wire bytes are real ESC. --no-color must strip them entirely.

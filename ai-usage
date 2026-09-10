@@ -207,32 +207,34 @@ except Exception: pass
       ;;
     copilot)
       for p in \
-        "$HOME/.config/github-copilot/hosts.json@@.github.com.oauth_token" \
-        "$HOME/.config/gh/hosts.yml@@github.com.oauth_token" \
+        "$HOME/.config/github-copilot/hosts.json" \
+        "$HOME/.config/gh/hosts.yml" \
         ; do
-        read -r file jqpath <<<"${p//@@/ }"
-        [ -f "$file" ] || continue
-        case "$file" in
+        [ -f "$p" ] || continue
+        case "$p" in
           *.yml|*.yaml)
             k=$(python3 -c "
 import sys,re
-t=open('$file').read()
+t=open('$p').read()
 for ln in t.splitlines():
-    if '${jqpath##*.}:' in ln:
+    if 'oauth_token:' in ln:
         m=re.search(r':\s*(\S+)', ln)
         if m: print(m.group(1)); break
 ")
             [ -n "$k" ] && { echo "Authorization|$k"; return; }
             ;;
           *)
+            # ponytail: 'github.com' is a top-level KEY with a literal dot —
+            # the dot-walker can't handle dots inside key names. Hardcode
+            # the bracket-notation lookup here; this is the only provider
+            # with a dotted key.
             k=$(python3 -c "
 import sys,json
-d=json.load(open('$file'))
-v=d
 try:
-    for k in '${jqpath#.}'.split('.'):
-        if k: v = v[int(k)] if k.lstrip('-').isdigit() else v[k]
-    print(v) if isinstance(v,str) and v else None
+    d=json.load(open('$p'))
+    gh=d.get('github.com') or {}
+    t=gh.get('oauth_token') or ''
+    print(t) if t else None
 except Exception: pass
 " 2>/dev/null)
             [ -n "$k" ] && { echo "Authorization|$k"; return; }
