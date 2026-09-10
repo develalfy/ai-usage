@@ -32,7 +32,8 @@ The installer is idempotent: run it again after updating the checkout.
 The repo ships a self-test that mocks HTTP and exercises every code path
 (file-mode key, auto-detect, JSON extract, perms warning, no-key path,
 `--json`, `--check`, `--help`, `--version`, `--no-color`, OAuth colors,
-malformed-key detection, JSON-blob extraction, error-path surfacing). 29 assertions, all pass.
+malformed-key detection, JSON-blob extraction, error-path surfacing,
+copilot dotted-key detection). 31 assertions, all pass.
 
 ```bash
 cd ~/projects/ai-usage && ./test.sh
