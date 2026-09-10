@@ -254,7 +254,7 @@ except Exception: pass
 providers=(
   "openrouter|OpenRouter|https://openrouter.ai/api/v1/auth/key|Authorization||data.usage_monthly"
   "anthropic|Claude|https://api.anthropic.com/v1/organizations/me|x-api-key|anthropic-version:2023-06-01|id"
-  "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization||total_granted"
+  "openai|OpenAI|https://api.openai.com/v1/dashboard/billing/credit_grants|Authorization||total_used"
   "copilot|GitHub|https://api.github.com/copilot_internal/user|Authorization||copilot_plan"
   # ponytail: MiniMax International Coding Plan — single non-fallback endpoint.
   # No China mirror, no retry: the bar should mirror reality, not chase it.
