@@ -557,10 +557,13 @@ print(san(val) + chr(9) + (san(extra) or '-') + chr(9) + (san(pct) or '-'))
   # compact form: "◇ OpenRouter $ 0 (month $ 0 + byok $ 0.22)"
   # ponytail: only prepend '$' when the value is a real number — '$ unavailable'
   # would be nonsense. The python walker returns '?' or 'unavailable' on errors.
+  # ponytail: single-quoted so the '$' is literal (no bash interpretation,
+  # no need to escape it). Earlier double-quoted `\\$` rendered as '\$' on the
+  # user's terminal — see commit 1b383fe followup.
   unit=""
   case "$out" in
     ''|'?'|unavailable|err) ;;
-    *) [ "$short" = openrouter ] && unit=" \\$" ;;
+    *) [ "$short" = openrouter ] && unit=' $' ;;
   esac
   [ -n "$out" ] && out=" ${out}"  # leading space only if there's a value
   # ponytail: per-provider color in interactive prompts. Threshold is the
