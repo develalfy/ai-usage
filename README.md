@@ -33,7 +33,7 @@ The repo ships a self-test that mocks HTTP and exercises every code path
 (file-mode key, auto-detect, JSON extract, perms warning, no-key path,
 `--json`, `--check`, `--help`, `--version`, `--no-color`, OAuth colors,
 malformed-key detection, JSON-blob extraction, error-path surfacing,
-copilot dotted-key detection). 31 assertions, all pass.
+copilot dotted-key detection, network-failure exit). 32 assertions, all pass.
 
 ```bash
 cd ~/projects/ai-usage && ./test.sh
