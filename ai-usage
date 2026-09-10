@@ -538,9 +538,9 @@ try:
         # surface it inline so the user sees their total spend, not just
         # the OpenRouter-routed slice.
         if um is not None and bm:
-            extra=f'month \\$ {um} + byok \\$ {bm:.2f}'
+            extra=f'month \\$ {um:.2f} + byok \\$ {bm:.2f}'
         elif um is not None:
-            extra=f'month \\$ {um}'
+            extra=f'month \\$ {um:.2f}'
         # Color threshold: % of monthly cap consumed (only when a cap exists).
         if lim and lim > 0 and um is not None:
             pct = f'{min(100, 100*float(um)/float(lim)):.0f}'
