@@ -561,7 +561,13 @@ print(san(val) + chr(9) + (san(extra) or '-') + chr(9) + (san(pct) or '-'))
   # ponytail: keep --bar (compact, prompt-line) and rich (interactive)
   # in sync — a single source of truth avoids the two drifting apart.
   # compact form: "◇ OpenRouter $ 0 (month $ 0 + byok $ 0.22)"
-  unit=""; [ "$short" = openrouter ] && unit=" \$"
+  # ponytail: only prepend '$' when the value is a real number — '$ unavailable'
+  # would be nonsense. The python walker returns '?' or 'unavailable' on errors.
+  unit=""
+  case "$out" in
+    ''|'?'|unavailable|err) ;;
+    *) [ "$short" = openrouter ] && unit=" \\$" ;;
+  esac
   [ -n "$out" ] && out=" ${out}"  # leading space only if there's a value
   # ponytail: per-provider color in interactive prompts. Threshold is the
   # %-of-limit number (or spend-vs-monthly-cap); empty/unknown = white.

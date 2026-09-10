@@ -31,7 +31,8 @@ The installer is idempotent: run it again after updating the checkout.
 
 The repo ships a self-test that mocks HTTP and exercises every code path
 (file-mode key, auto-detect, JSON extract, perms warning, no-key path,
-`--json`, `--check`, `--help`). 18 assertions, all pass.
+`--json`, `--check`, `--help`, `--version`, `--no-color`, OAuth colors,
+malformed-key detection, JSON-blob extraction, error-path surfacing). 29 assertions, all pass.
 
 ```bash
 cd ~/projects/ai-usage && ./test.sh
@@ -81,10 +82,10 @@ the provider's utilization) so the prompt line lights up at a glance when
 something is in trouble. The Bash prompt integration places `--bar` on the
 right edge of the terminal without taking the typing line.
 
-The prompt integration caches the compact status line at `/tmp/ai-usage.bar.$UID` for 60 seconds. Force a refresh:
+The prompt integration caches the compact status line at `/tmp/ai-usage.bar.$$` (per-shell) for 60 seconds. Force a refresh:
 
 ```bash
-rm -f "/tmp/ai-usage.bar.$UID"
+rm -f "/tmp/ai-usage.bar.$$"
 source ~/.bashrc
 ```
 
