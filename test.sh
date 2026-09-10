@@ -227,7 +227,30 @@ else
   FAIL=$((FAIL+1))
 fi
 
-# 9. error response → bar shows 'unavailable', --check exits 1.
+# 9b. network-failure path: --check exits 1 when curl fails (was silently
+# skipping the provider, making --check exit 0 on outages).
+mkdir -p "$TMP/netfail"
+echo "fakekey" > "$TMP/netfail/openrouter"; chmod 600 "$TMP/netfail/openrouter"
+mkdir -p "$TMP/netfail/bin"
+cat > "$TMP/netfail/bin/curl" <<'SH'
+#!/usr/bin/env bash
+# Simulate connection failure (exit 7 = couldn't connect).
+exit 7
+SH
+chmod +x "$TMP/netfail/bin/curl"
+out=$(HOME="$TMP/netfail" AI_USAGE_CONFIG="$TMP/netfail" PATH="$TMP/netfail/bin:$PATH" ./ai-usage --check 2>&1; echo "EXIT:$?")
+# Last line should be EXIT:1 — --check catches the curl failure.
+last="${out##*$'\n'}"
+if [[ "$last" == "EXIT:1" ]]; then
+  echo "  PASS  netfail: --check exits 1 when curl fails"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  netfail: expected --check exit 1, got: $last"
+  echo "        full: $out"
+  FAIL=$((FAIL+1))
+fi
+
+# 10. error response → bar shows 'unavailable', --check exits 1.
 mkdir -p "$TMP/errtest"
 echo "fakekey" > "$TMP/errtest/openrouter"; chmod 600 "$TMP/errtest/openrouter"
 mkdir -p "$TMP/errtest/bin"

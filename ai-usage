@@ -503,7 +503,11 @@ except Exception: pass
     fi
     continue
   fi
-  resp=$(curl -s --max-time 4 -H "$auth_style: $hdr_key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || continue
+  # ponytail: a curl failure (DNS, connection refused, timeout) must NOT
+  # silently drop the provider from the bar — that made --check exit 0 on
+  # a network outage. Set resp to empty so the python walker reports '?'
+  # which --check then flags as an error.
+  resp=$(curl -s --max-time 4 -H "$auth_style: $hdr_key" ${hdr_val:+-H "$hdr_val"} "$url" 2>/dev/null) || resp=""
   IFS=$'\t' read -r out rextra pct <<<"$(printf '%s' "$resp" | python3 -c "
 import sys,json,re
 raw=sys.stdin.read()
@@ -633,7 +637,9 @@ elif [ "${1:-}" = "--check" ]; then
   else
     printf '%b\n' "$bar"
   fi
-  errs=$(printf '%b' "$shorts" | grep -E 'unavailable|err' || true)
+  # ponytail: '?' also means the API was unreachable (curl failed) — surface
+  # that to --check so cron alerts on a network outage, not just API errors.
+  errs=$(printf '%b' "$shorts" | grep -E 'unavailable|err|^[^|]+\?$' || true)
   if [ -n "$errs" ]; then
     printf 'errors:\n%s\n' "$errs" >&2
     exit 1
